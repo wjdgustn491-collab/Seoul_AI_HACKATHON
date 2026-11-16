@@ -135,7 +135,7 @@ function card(c, i) {
     c.partial && `<span class="tag partial">일부 조건만 맞아요</span>`,
   ].filter(Boolean).join('');
   return `<div class="card">
-    <div class="head"><span class="name">${esc(c.name)}</span><span class="rank">${i + 1}위 · ${c.rating ? '★ ' + c.rating + ' (' + c.reviews + ')' : '리뷰 없음'}</span></div>
+    <div class="head"><span class="name">${esc(c.name)}</span><span class="rank">${c.score ? (i + 1) + '위 · ' : ''}${c.rating ? '★ ' + c.rating + ' (' + c.reviews + ')' : '리뷰 없음'}</span></div>
     <div class="menu">${esc(c.menu)}${c.qty ? ' × ' + c.qty : ''}</div>
     <div class="total">${won(c.total)} <span class="rank">배달팁 포함</span></div>
     <div class="checks">${c.checks.map(x => '✓ ' + esc(x)).join(' ')}</div>
@@ -159,7 +159,7 @@ function render(r) {
   if (r.text) add(esc(r.text), 'msg bot');
   if (r.cards?.length) {
     add(r.cards.map(card).join(''), 'cards');
-    add('광고 없이 조건으로만 골랐어요', 'noad');
+    if (!r.lookup) add('광고 없이 조건으로만 골랐어요', 'noad');
   }
   if (r.buttons?.length) buttons(r.buttons);
 }
