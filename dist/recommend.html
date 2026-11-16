@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메뉴 추천</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --surface: #fff; --ink: #14213d; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #0f766e; --brand-soft: #e6f4f2; --accent: #ea580c; --accent-soft: #fff1e8; --ai: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  .app { max-width: 440px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+  header { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); padding: 12px 16px 10px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 17px; margin: 0; }
+  .dong { font-size: 13px; color: var(--brand); font-weight: 600; }
+  .remain { font-size: 12px; color: var(--muted); }
+  .remain b { color: var(--brand); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 13px; background: var(--surface); color: var(--ink); }
+  .chip.accent { border-color: var(--accent); color: var(--accent); }
+  .chip button { border: 0; background: none; color: var(--muted); padding: 0 0 0 2px; font-size: 14px; cursor: pointer; line-height: 1; }
+  .chip.price { cursor: pointer; }
+  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  .msg { max-width: 85%; padding: 10px 13px; border-radius: 16px; white-space: pre-wrap; }
+  .bot { align-self: flex-start; background: var(--bg); border-top-left-radius: 4px; }
+  .user { align-self: flex-end; background: var(--brand); color: #fff; border-top-right-radius: 4px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { border: 1px solid var(--brand); background: var(--brand-soft); color: var(--brand); border-radius: 12px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .btn.ghost { border-color: var(--line); background: var(--surface); color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .banner { background: var(--accent-soft); color: #9a3412; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .banner .btn { border-color: var(--accent); background: var(--surface); color: var(--accent); padding: 4px 10px; font-size: 13px; }
+  .card { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card .name { font-weight: 700; font-size: 16px; }
+  .card .rank { font-size: 12px; color: var(--muted); }
+  .card .menu { color: var(--muted); font-size: 14px; }
+  .card .total { font-size: 20px; font-weight: 800; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--brand); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 12px; border-radius: 6px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tag.new { background: #ede9fe; color: var(--ai); }
+  .tag.partial { background: #f3f4f6; color: var(--muted); }
+  .reason { font-size: 14px; }
+  .quote { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 8px; }
+  .quote small { display: block; font-size: 11px; }
+  .order { border: 0; border-radius: 12px; padding: 10px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  .noad { font-size: 12px; color: var(--muted); text-align: center; }
+  .typing { color: var(--muted); font-size: 13px; }
+  form { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 10px 16px 16px; border-top: 1px solid var(--line); background: var(--surface); }
+  input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; background: var(--surface); color: var(--ink); }
+  form button { border: 0; border-radius: 12px; padding: 0 16px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0f1115; --surface: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #2a2f3a; --brand: #2dd4bf; --brand-soft: #0f2e2b; --accent: #fb923c; --accent-soft: #3a2314; }
+    :root:not([data-theme="light"]) .user { color: #04201d; }
+    :root:not([data-theme="light"]) .banner { color: var(--accent); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="top">
+      <h1><a href="index.html" aria-label="홈으로" style="color:inherit;text-decoration:none">‹</a> 메뉴 추천 <span class="dong" id="dong"></span></h1>
+      <span class="remain" id="remain"></span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+  <main id="log"></main>
+  <form id="form">
+    <input id="input" placeholder="예: 둘이서 바삭한 간장치킨, 프랜차이즈 말고" autocomplete="off" maxlength="300">
+    <button>보내기</button>
+  </form>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const log = $('log');
+let state = null, busy = false;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const won = n => n.toLocaleString('ko-KR') + '원';
+const scroll = () => log.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+function add(html, cls = '') {
+  const el = document.createElement('div');
+  if (cls) el.className = cls;
+  el.innerHTML = html;
+  log.appendChild(el);
+  scroll();
+  return el;
+}
+
+function buttons(list) {
+  const box = add('', 'btns');
+  for (const b of list) {
+    const el = document.createElement('button');
+    el.className = 'btn' + (b.ghost ? ' ghost' : '');
+    el.textContent = b.label;
+    el.onclick = () => { box.querySelectorAll('button').forEach(x => x.disabled = true); send(b.action, b.label); };
+    box.appendChild(el);
+  }
+}
+
+function budgetButtons() {
+  buttons([
+    ...[20000, 25000, 30000].map(v => ({ label: `${v / 10000}만`, action: { type: 'apply', cond: { budget: v, budget_unit: 'total', price_pref: 'none' } } })),
+    { label: '직접 입력', action: null },
+  ]);
+}
+
+function renderChips(chips = []) {
+  const box = $('chips');
+  box.innerHTML = '';
+  for (const c of chips) {
+    const el = document.createElement('span');
+    el.className = 'chip' + (c.accent ? ' accent' : '') + (c.kind === 'price' ? ' price' : '');
+    el.textContent = c.label;
+    if (c.kind === 'price') { el.title = '눌러서 예산 정하기'; el.onclick = e => { if (e.target === el) budgetButtons(); }; }
+    if (c.remove) {
+      const x = document.createElement('button');
+      x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', `${c.label} 지우기`);
+      x.onclick = () => send(c.remove, `'${c.label}' 지우기`);
+      el.appendChild(x);
+    }
+    box.appendChild(el);
+  }
+}
+
+function card(c, i) {
+  const tags = [
+    c.valueLabel && `<span class="tag">${esc(c.valueLabel)}</span>`,
+    c.isNew && `<span class="tag new">새로 생긴 가게</span>`,
+    c.partial && `<span class="tag partial">일부 조건만 맞아요</span>`,
+  ].filter(Boolean).join('');
+  return `<div class="card">
+    <div class="head"><span class="name">${esc(c.name)}</span><span class="rank">${i + 1}위 · ${c.rating ? '★ ' + c.rating + ' (' + c.reviews + ')' : '리뷰 없음'}</span></div>
+    <div class="menu">${esc(c.menu)}${c.qty ? ' × ' + c.qty : ''}</div>
+    <div class="total">${won(c.total)} <span class="rank">배달팁 포함</span></div>
+    <div class="checks">${c.checks.map(x => '✓ ' + esc(x)).join(' ')}</div>
+    ${tags ? `<div class="tags">${tags}</div>` : ''}
+    ${c.reason ? `<div class="reason">${esc(c.reason)}</div>` : ''}
+    ${c.quote ? `<div class="quote"><small>사장님 설명</small>“${esc(c.quote)}”</div>` : ''}
+    <button class="order" type="button">주문하기</button>
+  </div>`;
+}
+
+function render(r) {
+  renderChips(r.chips);
+  if (r.remaining != null) $('remain').innerHTML = `남은 가게 <b>${r.remaining}</b>곳`;
+  if (r.banner) {
+    const b = add(`<span>${esc(r.banner)}</span>`, 'banner');
+    const btn = document.createElement('button');
+    btn.className = 'btn'; btn.type = 'button'; btn.textContent = '예산 정하기';
+    btn.onclick = budgetButtons;
+    b.appendChild(btn);
+  }
+  if (r.text) add(esc(r.text), 'msg bot');
+  if (r.cards?.length) {
+    add(r.cards.map(card).join(''), 'cards');
+    add('광고 없이 조건으로만 골랐어요', 'noad');
+  }
+  if (r.buttons?.length) buttons(r.buttons);
+}
+
+async function send(action, echo) {
+  if (!action) { $('input').placeholder = '예: 3만 원까지 괜찮아'; $('input').focus(); return; }
+  if (busy) return;
+  busy = true;
+  if (echo) add(esc(echo), 'msg user');
+  const wait = add('찾는 중…', 'typing');
+  try {
+    const res = await fetch('/api/recommend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ state, action }) });
+    const data = await res.json();
+    wait.remove();
+    if (!res.ok) { add(esc(data.error || '오류가 났어요.'), 'msg bot'); return; }
+    state = data.state;
+    $('dong').textContent = state.dong || '';
+    render(data.reply);
+  } catch {
+    wait.remove();
+    add('서버에 연결하지 못했어요.', 'msg bot');
+  } finally { busy = false; }
+}
+
+$('form').onsubmit = e => {
+  e.preventDefault();
+  const t = $('input').value.trim();
+  if (!t) return;
+  if (!state?.dong) { add('먼저 동네를 골라 주세요.', 'msg bot'); return; }
+  $('input').value = '';
+  send({ type: 'text', text: t }, t);
+};
+
+add('어느 동네로 배달받으세요?', 'msg bot');
+buttons(['서초1동', '서초2동', '서초4동'].map(d => ({ label: d, action: { type: 'dong', dong: d } })));
+</script>
+</body>
+</html>
