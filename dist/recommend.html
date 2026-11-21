@@ -74,6 +74,8 @@
   .btn { border: 1px solid var(--brand); background: var(--brand-soft); color: var(--brand); border-radius: 11px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
   .btn.ghost { border-color: var(--line); background: var(--surface); color: var(--ink); }
   .btn:disabled { opacity: .45; cursor: default; }
+  .btn.has-preference { position: relative; padding-right: 35px; }
+  .preference-badge { position: absolute; top: 3px; right: 4px; padding: 1px 3px; border-radius: 4px; background: var(--brand-soft); color: var(--brand); font-size: 9px; font-weight: 800; line-height: 1.2; }
   .banner { background: var(--accent-soft); color: #9a3412; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .banner .btn { border-color: var(--accent); background: var(--surface); color: var(--accent); padding: 4px 10px; font-size: 13px; }
   .cards { display: flex; flex-direction: column; gap: 10px; }
@@ -182,6 +184,7 @@
 import { browserKey, demo, esc, won } from './db.js';
 import { addCartMenus, readCart, setCartAccount } from './cart.js';
 import { matchesOrderableStore, recommendationCartSelection } from './recommend-catalog.js';
+import { choiceKey, preferredChoice, recordPreferences } from './recommend-preferences.js';
 import { customerRequest, reloadOnSessionChange } from './customer-session.js';
 import { heatLevels } from './menu-interview.js';
 import { suggest, fetchWeather, GU } from './suggest.js';
@@ -194,6 +197,7 @@ reloadOnSessionChange();
 const { account } = await customerRequest('session').catch(() => ({ account: null }));
 setCartAccount(account?.id);
 const SESSION_KEY = 'seoul-recommend-conversation' + (account ? ':' + account.id : '');
+const PREFERENCE_KEY = `bappilot-recommend-preferences:${account?.id ?? 'guest'}`;
 let saved;
 // 새로고침이면 처음부터. 장바구니·가게 화면에 갔다가 돌아온 경우(뒤로 가기 등)는 대화를 이어간다.
 const reloaded = performance.getEntriesByType('navigation')[0]?.type === 'reload';
@@ -308,12 +312,22 @@ function add(html, cls = '') {
   return el;
 }
 
-function buttons(list, historical = false, stack = false) {
+function buttons(list, historical = false, stack = false, choiceGroup) {
   const box = add('', 'btns' + (stack ? ' stack' : ''));
+  const recommended = choiceGroup ? preferredChoice(PREFERENCE_KEY, list.map(b => choiceKey(choiceGroup, b.action))) : null;
   for (const b of list) {
+    const choice = choiceKey(choiceGroup, b.action);
     const el = document.createElement('button');
     el.className = 'btn' + (b.ghost && !stack ? ' ghost' : '') + (stack && b.label === '처음부터' ? ' restart' : '');
     el.textContent = b.label;
+    if (recommended && choice === recommended) {
+      el.classList.add('has-preference');
+      el.setAttribute('aria-label', b.label + ' · 이전에 자주 선택한 항목');
+      const badge = el.appendChild(document.createElement('span'));
+      badge.className = 'preference-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = '추천';
+    }
     if (b.change) { // 2줄(작은 글씨): 바뀌는 조건
       const sub = document.createElement('small');
       sub.textContent = `${[b.change.label, b.change.from].filter(Boolean).join(' ')} → ${b.change.to}`;
@@ -326,11 +340,11 @@ function buttons(list, historical = false, stack = false) {
     el.onclick = async () => {
       if (busy) return;
       if (b.action?.type === 'apply' && b.action?.cond?.menu) {
-        await send(b.action, b.label);
+        await send(b.action, b.label, choice);
         return;
       }
       box.querySelectorAll('button').forEach(x => x.disabled = true);
-      if (!await send(b.action, b.label)) box.querySelectorAll('button').forEach(x => x.disabled = false);
+      if (!await send(b.action, b.label, choice)) box.querySelectorAll('button').forEach(x => x.disabled = false);
     };
     box.appendChild(el);
   }
@@ -357,7 +371,7 @@ function renderChips(chips = []) {
     }
     if (c.kind === 'menu' && categories.length) {
       el.title = '눌러서 음식 바꾸기';
-      el.onclick = e => { if (e.target === el) buttons(categories.filter(x => x !== c.label).map(x => ({ label: x, action: { type: 'apply', cond: { menu: x } } }))); };
+      el.onclick = e => { if (e.target === el) buttons(categories.filter(x => x !== c.label).map(x => ({ label: x, action: { type: 'apply', cond: { menu: x } } })), false, false, 'menu'); };
     }
     if (c.remove) {
       const x = document.createElement('button');
@@ -512,13 +526,13 @@ function renderReply(r, historical) {
   }
   if (r.selected) renderCards([r.selected]);
   if (r.followUp) add(esc(r.followUp), 'msg bot');
-  if (r.buttons?.length) buttons(r.buttons, historical, r.zero);
+  if (r.buttons?.length) buttons(r.buttons, historical, r.zero, r.choiceGroup);
   if (!r.preserveResults && !historical) { shownCount = r.cards?.length && !r.lookup ? r.cards.length : null; updateHeader(); }
   $('input').placeholder = r.placeholder ?? DEFAULT_PLACEHOLDER;
   if (r.focusInput && !historical) $('input').focus({ preventScroll: true });
 }
 
-async function send(action, echo) {
+async function send(action, echo, choice) {
   if (!action) { $('input').placeholder = '예: 3만 원까지 괜찮아'; $('input').focus(); return; }
   if (busy) return;
   busy = true;
@@ -561,11 +575,12 @@ async function send(action, echo) {
       for (const button of optionButtons) { button.disabled = true; button.dataset.spent = '1'; }
       optionButtons.clear();
     }
-    const prevDong = state?.dong;
+    const previous = state;
     state = data.state;
     updateHeader();
-    if (state?.dong !== prevDong) void refreshSuggest();
+    if (state?.dong !== previous?.dong) void refreshSuggest();
     render(data.reply);
+    recordPreferences(PREFERENCE_KEY, action, previous, state, choice);
     remember({ echo, reply: data.reply });
     return true;
   } catch {
