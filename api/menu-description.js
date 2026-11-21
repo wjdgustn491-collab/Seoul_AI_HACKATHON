@@ -1,6 +1,8 @@
 import { createLLM } from '../lib/llm/index.js';
+import { menuFeatureReference } from '../lib/menu-feature-references.js';
 import {
-  formatMenuDescription, readMenuDescriptionInput, readMenuInterviewAnswers, readMenuQuestionsInput,
+  formatMenuDescription, formatShortMenuDraft, readMenuDescriptionInput, readMenuInterviewAnswers,
+  readMenuQuestionsInput, readShortMenuInterview,
   ruleMenuQuestions, validateMenuDraft, validateMenuQuestions,
 } from '../lib/menu-description.js';
 
@@ -14,6 +16,21 @@ async function generate(method, input, validate) {
     // Rules can prepare the same step if the model is unavailable.
   }
   return null;
+}
+
+async function prepareShortDraft(menu) {
+  const reference = menuFeatureReference(menu);
+  let selection;
+  let suggestion;
+  if (reference) {
+    const { source, url, options } = reference;
+    const { name, notes, taste } = menu;
+    selection = await generate('selectMenuFeature', { name, composition: notes, taste, options },
+      output => output.choice >= 0 && output.choice <= options.length ? output : null);
+    const text = options[(selection?.value.choice ?? 1) - 1];
+    if (text) suggestion = { text, source, url };
+  }
+  return { ...formatShortMenuDraft(menu, suggestion), provider: selection?.provider ?? 'rules' };
 }
 
 export default async function menuDescription(req, res) {
@@ -32,6 +49,7 @@ export default async function menuDescription(req, res) {
       const plan = await generate('planMenuQuestions', input, validateMenuQuestions);
       return res.status(200).json({ questions: plan?.value ?? ruleMenuQuestions(input), provider: plan?.provider ?? 'rules' });
     }
+    if (body?.action === 'short-draft') return res.status(200).json(await prepareShortDraft(readShortMenuInterview(body)));
     guided = body?.answers !== undefined;
     menu = guided ? readMenuInterviewAnswers(body) : readMenuDescriptionInput(body);
   } catch (error) {

@@ -114,6 +114,7 @@
 import { browserKey, demo, esc, won } from './db.js';
 import { addCartMenus, readCart, setCartAccount } from './cart.js';
 import { customerRequest, reloadOnSessionChange } from './customer-session.js';
+import { heatLevels } from './menu-interview.js';
 
 const $ = id => document.getElementById(id);
 const log = $('log');
@@ -223,10 +224,12 @@ const short = (text, max) => text.length > max ? text.slice(0, max - 1) + '…' 
 function card(c, i, common = []) {
   const params = new URLSearchParams({ store: c.storeId, from: 'recommend' });
   if (c.menuId) params.set('menu', c.menuId);
+  const heat = heatLevels.find(level => level.number === c.heat);
   const tags = [
     c.foodLabel && `<span class="tag">${esc(c.foodLabel)} 후보</span>`,
     c.setMenu && '<span class="tag">세트 메뉴</span>',
     c.portionNote && `<span class="tag">${esc(c.portionNote)}</span>`,
+    heat && `<span class="tag">맵기 ${heat.number}/5 · ${esc(heat.example)} 정도</span>`,
     c.valueLabel && `<span class="tag">${esc(c.valueLabel)}</span>`,
     c.isGoodPrice && '<span class="tag">착한가게</span>',
     c.isNew && `<span class="tag new">새로 생긴 가게</span>`,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import menuDescription from '../api/menu-description.js';
 import recommend from '../api/recommend.js';
+import { estimateMenuHeat, heatLevels, mentionsHeat, readRecordedTaste } from '../dist/menu-interview.js';
 
 async function post(handler, body) {
   const res = {
@@ -111,6 +112,71 @@ test('menu drafts use the seller input with Gemini and fall back on unsupported 
   assert.equal(calls, 2);
 });
 
+const shortDraft = {
+  action: 'short-draft', name: '마라로제엽떡', price: 15000,
+  answers: { portion: { grams: 320, servings: 2 }, composition: '밀떡, 어묵, 마라소스', taste: '크리미한 로제', heat: 3 },
+};
+
+test('short drafts store numbers, confirmed heat, and the approved draft text together', async t => {
+  setGeminiKey(t, undefined);
+  const result = await post(menuDescription, shortDraft);
+  assert.equal(result.status, 200);
+  assert.equal(result.data.provider, 'rules');
+  assert.equal(result.data.description, '320g / 2인분 · 밀떡, 어묵, 마라소스 · 크리미한 로제 · 맵기 3/5 · 쫄깃한 떡');
+  assert.equal(result.data.suggestion.text, result.data.details.features);
+  assert.equal(new URL(result.data.suggestion.url).hostname, 'github.com');
+  assert.deepEqual(readRecordedTaste(result.data.details.taste), { taste: '크리미한 로제', heat: 3 });
+  assert.equal(result.data.details.servings, 2);
+  assert.equal(result.data.details.notes, shortDraft.answers.composition);
+
+  const draftWith = answers => post(menuDescription, { ...shortDraft, answers: { ...shortDraft.answers, ...answers } });
+  for (const answers of [
+    { portion: {} }, { portion: { grams: '320' } }, { portion: { grams: 0, servings: 2 } },
+    { portion: { servings: 21 } }, { heat: 6 }, { taste: '맛'.repeat(25) }, { composition: '' },
+  ]) assert.equal((await draftWith(answers)).status, 400);
+
+  const entered = await draftWith({ portion: { servings: 1 }, taste: '순한 로제', heat: null, features: '통밀떡' });
+  assert.equal(entered.data.description, '1인분 · 밀떡, 어묵, 마라소스 · 순한 로제 · 통밀떡');
+  assert.equal(entered.data.suggestion, undefined);
+  const incompatible = await post(menuDescription, { ...shortDraft, name: '오븐치킨', answers: { ...shortDraft.answers, heat: null } });
+  assert.equal(incompatible.data.suggestion, undefined);
+});
+
+test('Gemini selects only referenced features and can omit incompatible suggestions', async t => {
+  setGeminiKey(t, 'test-key');
+  let choice = 2;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.equal(new URL(url).hostname, 'generativelanguage.googleapis.com');
+    const body = JSON.parse(init.body);
+    const payload = JSON.parse(body.contents[0].parts[0].text);
+    assert.deepEqual(payload.options, ['쫄깃한 떡', '걸쭉한 소스']);
+    assert.equal(payload.taste, shortDraft.answers.taste);
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ choice }) }] } }] });
+  });
+  const result = await post(menuDescription, shortDraft);
+  assert.equal(result.data.provider, 'gemini');
+  assert.equal(result.data.suggestion.text, '걸쭉한 소스');
+  choice = 0;
+  assert.equal((await post(menuDescription, shortDraft)).data.suggestion, undefined);
+  choice = 12;
+  const fallback = await post(menuDescription, shortDraft);
+  assert.equal(fallback.data.provider, 'rules');
+  assert.equal(fallback.data.details.features, '쫄깃한 떡');
+});
+
+test('heat only estimates from valid quantities and offers recognizable anchors', () => {
+  assert.equal(mentionsHeat('마라로제엽떡'), true);
+  assert.equal(mentionsHeat('맵지 않은 간장 소스'), false);
+  assert.equal(mentionsHeat('고춧가루 없이 간장'), false);
+  assert.deepEqual(heatLevels.map(({ number }) => number), [1, 2, 3, 4, 5]);
+  assert.equal(estimateMenuHeat(12000, 90, 320).example, '신라면');
+  assert.equal(estimateMenuHeat(4404, 25, 25).number, 4);
+  assert.equal(estimateMenuHeat(10000, 40, 40).number, 5);
+  assert.equal(estimateMenuHeat(10000, 41, 40), null);
+  assert.equal(estimateMenuHeat(0, 20, 300), null);
+  assert.equal(estimateMenuHeat(NaN, 20, 300), null);
+});
+
 test('recommendations apply saved menu details, prices and removals only to the matching browser', async t => {
   const shop = { id: 'merchant', name: '동네부엌', region: '서초구', dong: '서초4동', category: '치킨', tip: 1000, rating: 4.5 };
   const original = { id: 'original', store: shop.id, name: '뼈 후라이드치킨', price: 19000, desc: '', main: true };
@@ -153,6 +219,14 @@ test('recommendations apply saved menu details, prices and removals only to the 
   edits = [{ ...approved, price: 21000 }];
   const overBudget = await search(merchantBrowser, request);
   assert.equal(overBudget.data.reply.cards[0].budgetNote, '예산보다 2,000원 높아요');
+
+  edits = [{ ...approved, details: { ...approved.details, taste: '간장 · 맵기 3/5' } }];
+  const spicy = await search(merchantBrowser, '서초구에서 매운 치킨 추천해줘');
+  assert.equal(spicy.data.reply.cards[0].menuId, approved.id);
+  assert.equal(spicy.data.reply.cards[0].heat, 3);
+  assert.ok(spicy.data.reply.cards[0].checks.includes('매운'));
+  const mild = await search(merchantBrowser, request);
+  assert.deepEqual(mild.data.reply.cards ?? [], []);
 
   edits = [{ ...approved, available: false }, { ...original, removed: true, available: false }];
   const noMenus = await search(merchantBrowser, '서초구 치킨 추천해줘');

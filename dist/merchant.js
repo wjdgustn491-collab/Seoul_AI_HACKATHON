@@ -1,4 +1,8 @@
 import { count, date, demo, esc, readLocal, saveLocal, statusLabels, won } from "./db.js";
+import {
+  estimateMenuHeat, heatLevels, heatReferenceUrl, maxMenuGrams, maxMenuServings, maxSauceShu,
+  mentionsHeat, readRecordedTaste, shortAnswerLimits,
+} from "./menu-interview.js";
 
 let storeId = readLocal("seoul-demo-store", "G0427");
 let catalog = { stores: [] };
@@ -15,11 +19,13 @@ let orderFilter = "";
 let monthFilter = "";
 let busy = false;
 let interview;
+let suggestedFeature;
 const interviewSteps = [
-  { key: 'portion', label: '양', max: 60 },
-  { key: 'composition', label: '구성', max: 240 },
-  { key: 'taste', label: '맛', max: 60 },
-  { key: 'features', label: '특징', max: 100 },
+  { key: 'portion', label: '양' },
+  { key: 'composition', label: '구성', placeholder: '주재료나 메인 반찬' },
+  { key: 'taste', label: '맛', placeholder: '예  달콤한 간장' },
+  { key: 'heat', label: '맵기' },
+  { key: 'features', label: '특징 (선택)', placeholder: '예  바삭한 튀김옷' },
 ];
 const pageSize = 20;
 const dayKey = value => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
@@ -110,6 +116,7 @@ function menu() {
     '<label>특징<input name="features" maxlength="100" value="' + esc(details.features) + '"></label>' +
     '<label class="menu-form-wide">구성·설명 메모<textarea name="notes" maxlength="240" rows="2">' + esc(details.notes) + '</textarea></label>' +
     '<label class="menu-form-wide">고객에게 표시할 설명<textarea name="description" maxlength="240" rows="3" placeholder="설명을 직접 작성하거나 AI 초안을 만들어 편집하세요">' + esc(item?.description) + '</textarea></label>' +
+    '<div id="menu-feature-reference" class="menu-form-wide" hidden></div>' +
     '<div class="menu-form-wide menu-form-actions"><label class="check"><input type="checkbox" name="available"' + (item?.available !== false ? " checked" : "") + '>판매 중</label>' +
     '<button type="submit" class="primary">' + (item ? "수정 저장" : "메뉴 등록") + '</button>' +
     '</div></div></details></form></section><section class="panel"><h2>메뉴 목록</h2>' +
@@ -169,6 +176,7 @@ function renderStoreSelector() {
 
 function render() {
   interview = undefined;
+  suggestedFeature = undefined;
   document.querySelector("#dashboard-title").textContent = headings[tab];
   document.querySelector(".sidebar-shop strong").textContent = catalog.stores.find(store => store.id === storeId)?.name || "가게를 불러오는 중";
   document.querySelectorAll("[data-tab]").forEach(node => {
@@ -223,19 +231,58 @@ async function requestMenuText(form, payload, waiting) {
   }
 }
 
+function heatDetected(taste) {
+  const { name, answers } = interview;
+  return [name, answers.composition, taste].some(mentionsHeat);
+}
+
+function portionQuestion(question, { grams, servings }) {
+  return '<fieldset class="menu-answer-group"><legend>' + esc(question) + '</legend>' +
+    '<div class="menu-answer-fields">' +
+    '<label>중량 (g)<input id="menu-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" placeholder="320" value="' + esc(grams) + '"></label>' +
+    '<label>인분<input id="menu-servings" type="number" min="1" max="' + maxMenuServings + '" inputmode="numeric" placeholder="2" value="' + esc(servings) + '"></label></div>' +
+    '<small class="muted">중량 또는 인분 중 하나 이상</small></fieldset>';
+}
+
+function heatQuestion({ heat, portion }) {
+  return '<fieldset class="menu-answer-group"><legend>라면 기준으로 얼마나 매운가요?</legend><div class="menu-heat-options">' +
+    heatLevels.map(({ number, example, label, shu }) =>
+      '<label class="menu-heat-option"><input type="radio" name="menu-heat" value="' + number + '"' + (number === heat ? ' checked' : '') +
+      '><span><strong>' + number + ' · ' + example + '</strong><small>' + label + (shu ? ' · 약 ' + count(shu) + ' SHU' : '') + '</small></span></label>'
+    ).join('') + '</div></fieldset>' +
+    '<details class="menu-heat-estimate"><summary>재료로 맵기 추정</summary>' +
+    '<p class="muted">SHU와 중량으로 계산합니다. 조리법에 따라 체감은 달라집니다. ' +
+    '<a href="' + heatReferenceUrl + '" target="_blank" rel="noopener noreferrer">라면 기준값</a></p>' +
+    '<div class="menu-answer-fields">' +
+    '<label>매운 재료의 SHU<input id="menu-spice-shu" type="number" min="1" max="' + maxSauceShu + '" inputmode="numeric" placeholder="10000"></label>' +
+    '<label>넣은 재료 (g)<input id="menu-spice-grams" type="number" min="0.01" max="' + maxMenuGrams + '" step="any" inputmode="decimal" placeholder="80"></label>' +
+    '<label>완성 음식 (g)<input id="menu-finished-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" value="' + esc(portion.grams) + '"></label></div>' +
+    '<output id="menu-heat-result" aria-live="polite"></output></details>';
+}
+
 function renderQuestion() {
-  const { form, questions, answers, step } = interview;
-  const { key, label, max } = interviewSteps[step];
+  const { form, questions, answers, step, heatOverride } = interview;
+  const { key, label, placeholder } = interviewSteps[step];
   const panel = form.querySelector('#menu-interview');
-  panel.innerHTML = '<p class="menu-question-step">질문 ' + (step + 1) + '/' + interviewSteps.length + ' · ' + label + '</p>' +
-    '<label for="menu-answer">' + esc(questions[key]) + '</label>' +
-    '<textarea id="menu-answer" rows="2" maxlength="' + max + '" placeholder="답변을 적어 주세요">' + esc(answers[key]) + '</textarea>' +
+  let field = '';
+  if (key === 'portion') field = portionQuestion(questions[key], answers.portion);
+  else if (key === 'heat') field = heatQuestion(answers);
+  else {
+    field = '<label>' + esc(questions[key]) +
+      '<input id="menu-answer" maxlength="' + shortAnswerLimits[key] + '" placeholder="' + placeholder + '" value="' + esc(answers[key]) + '"></label>';
+    if (key === 'taste') {
+      field += '<label class="check"><input id="menu-is-spicy" type="checkbox"' +
+        ((heatOverride ?? heatDetected(answers.taste)) ? ' checked' : '') + '>매운맛 있음</label>';
+    }
+  }
+  panel.innerHTML = '<p class="menu-question-step">' + label + '</p>' + field +
     '<div class="menu-form-actions">' +
-    action(step === interviewSteps.length - 1 ? '설명 초안 만들기' : '다음 질문', 'interview-next', '', 'primary') +
-    action('건너뛰기', 'interview-skip') + (step ? action('이전 질문', 'interview-back') : '') +
+    action(key === 'features' ? '설명 만들기' : '다음 질문', 'interview-next', '', 'primary') +
+    (key === 'features' ? action('특징 건너뛰기', 'interview-skip') : '') +
+    (step ? action('이전 질문', 'interview-back') : '') +
     action('질문 닫기', 'interview-close', '', 'plain') + '</div>';
   panel.hidden = false;
-  panel.querySelector('#menu-answer').focus();
+  (panel.querySelector('input:checked:not([type="checkbox"])') ?? panel.querySelector('input')).focus();
 }
 
 async function startInterview(form) {
@@ -243,13 +290,16 @@ async function startInterview(form) {
   const { name, price, details } = readMenuForm(new FormData(form));
   const category = catalog.stores.find(store => store.id === storeId)?.category;
   const { questions } = await requestMenuText(form, { action: 'questions', name, price, category }, '메뉴에 맞는 질문을 준비하고 있습니다.');
-  if (!interviewSteps.every(({ key }) => typeof questions?.[key] === 'string' && questions[key])) {
+  if (!interviewSteps.every(({ key }) => key === 'heat' || typeof questions?.[key] === 'string' && questions[key])) {
     throw new Error('질문을 준비하지 못했습니다. 다시 시도해 주세요.');
   }
   if (!form.isConnected) return;
+  const { taste, heat } = readRecordedTaste(details.taste);
+  const grams = Number(details.portion.match(/^(\d+)\s*(?:g|그램)(?=\s*(?:[/·,]|$))/i)?.[1]) || null;
+  const servings = details.servings ?? (Number(details.portion.match(/(?:^|[/·,]\s*)(\d{1,2})\s*인분$/)?.[1]) || null);
   interview = {
-    form, name, price, questions, step: 0, servings: details.servings,
-    answers: { portion: details.portion, composition: details.notes, taste: details.taste, features: details.features },
+    form, name, price, questions, step: 0, spicy: !!heat, heatOverride: heat ? true : null,
+    answers: { portion: { grams, servings }, composition: details.notes, taste, features: details.features, heat },
   };
   form.elements.name.readOnly = true;
   form.elements.price.readOnly = true;
@@ -271,6 +321,48 @@ function closeInterview(form) {
   interview = undefined;
 }
 
+function readAnswer(form, key, mode) {
+  const { answers } = interview;
+  const next = mode === 'interview-next';
+  if (key === 'portion') {
+    const grams = form.querySelector('#menu-grams');
+    const servings = form.querySelector('#menu-servings');
+    if (!grams.reportValidity() || !servings.reportValidity()) return false;
+    if (!grams.value && !servings.value) throw new Error('중량이나 인분을 입력해 주세요.');
+    answers.portion = { grams: Number(grams.value) || null, servings: Number(servings.value) || null };
+  } else if (key === 'heat') {
+    const heat = form.querySelector('input[name="menu-heat"]:checked');
+    if (next && !heat) throw new Error('맵기 1~5단계 중 하나를 골라 주세요.');
+    answers.heat = heat ? Number(heat.value) : null;
+  } else {
+    const field = form.querySelector('#menu-answer');
+    const value = mode === 'interview-skip' ? '' : field.value.trim();
+    if (next && !value && key !== 'features') throw new Error('답변을 한 줄로 입력해 주세요.');
+    if (next && value.length > shortAnswerLimits[key]) throw new Error('답변을 ' + shortAnswerLimits[key] + '자 이내로 줄여 주세요.');
+    answers[key] = value;
+  }
+  if (key === 'taste') {
+    interview.spicy = form.querySelector('#menu-is-spicy').checked;
+    if (!interview.spicy) answers.heat = null;
+  }
+  return true;
+}
+
+function showFeatureReference(form, suggestion) {
+  suggestedFeature = suggestion;
+  const panel = form.querySelector('#menu-feature-reference');
+  panel.hidden = !suggestion;
+  panel.replaceChildren();
+  if (!suggestion) return;
+  const link = document.createElement('a');
+  link.href = suggestion.url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = suggestion.source;
+  panel.append('추천 특징 · 저장 전 확인 ', link);
+  panel.insertAdjacentHTML('beforeend', action('추천 특징 빼기', 'remove-feature', '', 'plain'));
+}
+
 async function advanceInterview(mode, form) {
   if (interview?.form !== form) return;
   if (mode === 'interview-close') {
@@ -279,30 +371,28 @@ async function advanceInterview(mode, form) {
     return;
   }
   const { key } = interviewSteps[interview.step];
-  const field = form.querySelector('#menu-answer');
-  const answer = mode === 'interview-skip' ? '' : field.value.trim();
-  if (mode === 'interview-next' && !answer) throw new Error('답변을 적거나 건너뛰어 주세요.');
-  interview.answers[key] = answer;
+  if (!readAnswer(form, key, mode)) return;
 
   if (mode === 'interview-back' || interview.step < interviewSteps.length - 1) {
-    interview.step += mode === 'interview-back' ? -1 : 1;
+    const direction = mode === 'interview-back' ? -1 : 1;
+    interview.step += direction;
+    if (interviewSteps[interview.step].key === 'heat' && !interview.spicy) interview.step += direction;
     renderQuestion();
     return;
   }
 
-  const { name, price, answers, servings } = interview;
-  const draft = await requestMenuText(form, { name, price, answers, servings }, '답변을 바탕으로 설명 초안을 만드는 중입니다.');
+  const { name, price, answers } = interview;
+  const draft = await requestMenuText(form, { action: 'short-draft', name, price, answers }, '설명 작성 중…');
   if (typeof draft.description !== 'string' || !draft.details) throw new Error('설명 초안을 불러오지 못했습니다. 다시 시도해 주세요.');
   for (const field of ['portion', 'taste', 'features', 'notes', 'servings']) {
     form.elements[field].value = draft.details[field] ?? '';
   }
   form.elements.description.value = draft.description;
   closeInterview(form);
+  showFeatureReference(form, draft.suggestion);
   form.querySelector('#menu-details').open = true;
   form.elements.description.focus();
-  message.textContent = draft.provider === 'gemini'
-    ? 'AI 초안을 만들었습니다. 설명을 확인하고 저장해 주세요.'
-    : '답변을 정리했습니다. 설명을 확인하고 저장해 주세요.';
+  message.textContent = '설명을 확인하고 저장해 주세요.';
 }
 
 document.addEventListener("click", event => {
@@ -312,6 +402,15 @@ document.addEventListener("click", event => {
   const { mode, value } = control.dataset;
   if (mode === 'start-interview') { void run(() => startInterview(control.form), control); return; }
   if (mode.startsWith('interview-')) { void run(() => advanceInterview(mode, control.form), control); return; }
+  if (mode === 'remove-feature' && suggestedFeature) {
+    const { features, description } = control.form.elements;
+    const { text } = suggestedFeature;
+    if (features.value.trim() === text) features.value = '';
+    description.value = description.value.split(' · ').filter(phrase => phrase.trim() !== text).join(' · ');
+    showFeatureReference(control.form);
+    description.focus();
+    return;
+  }
   void run(async () => {
     if (mode === "refresh") await load();
     if (mode === "page") page = Number(value);
@@ -336,6 +435,7 @@ document.addEventListener("click", event => {
 });
 
 document.addEventListener("change", event => {
+  if (interview && event.target.id === 'menu-is-spicy') interview.heatOverride = event.target.checked;
   if (event.target.id === "demo-store") {
     const selector = event.target;
     const id = selector.value;
@@ -351,6 +451,26 @@ document.addEventListener("change", event => {
   }
   if (event.target.id === "order-filter") { orderFilter = event.target.value; page = 0; render(); }
   if (event.target.id === "sales-month" && event.target.value) { monthFilter = event.target.value; render(); }
+});
+
+content.addEventListener('input', event => {
+  if (!interview) return;
+  const { form, step, heatOverride } = interview;
+  if (interviewSteps[step].key === 'taste' && event.target.id === 'menu-answer' && heatOverride === null) {
+    form.querySelector('#menu-is-spicy').checked = heatDetected(event.target.value);
+  }
+  if (!event.target.closest('.menu-heat-estimate')) return;
+  const inputs = ['#menu-spice-shu', '#menu-spice-grams', '#menu-finished-grams'].map(id => form.querySelector(id));
+  const result = estimateMenuHeat(...inputs.map(input => input.valueAsNumber));
+  form.querySelector('#menu-heat-result').textContent = result
+    ? '예상 ' + result.number + '단계 · ' + result.example
+    : (inputs.every(input => input.value) ? 'SHU와 중량을 확인해 주세요.' : '');
+});
+
+content.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' || event.isComposing || !event.target.matches('#menu-answer, #menu-grams, #menu-servings')) return;
+  event.preventDefault();
+  interview?.form.querySelector('[data-mode="interview-next"]').click();
 });
 
 content.addEventListener("submit", event => {
