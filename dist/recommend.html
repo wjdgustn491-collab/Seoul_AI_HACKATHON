@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>당겨요 | 메뉴 추천</title>
+<title>당겨요 | 밥파일럿</title>
 <script src="phone-clock.js" defer></script>
 <style>
   :root {
     color-scheme: light;
     --bg: #f4f6f4; --surface: #fff; --ink: #191b1a; --muted: #656b67; --line: #e5e8e5;
     --brand: #a63b21; --brand-soft: #fff4ed; --accent: #a63b21; --accent-soft: #fff1e8; --ai: #6d28d9;
+    --dark: #232825; --card-line: #dde1dd;
   }
   * { box-sizing: border-box; }
   body { margin: 0; display: grid; place-items: center; min-height: 100dvh; background: #e7ebe7; color: var(--ink); font: 14px/1.5 Inter, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
@@ -44,6 +45,16 @@
   .common { font-size: 13px; color: var(--brand); }
   .feedback { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--muted); }
   .feedback .btn { padding: 4px 12px; }
+  .suggest { display: flex; align-items: center; gap: 10px; margin: 10px 16px 0; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: var(--ink); }
+  .suggest[hidden] { display: none; }
+  .suggest .say { flex: 1; min-width: 0; }
+  .suggest .say b { display: block; font-size: 14px; }
+  .suggest .say small { color: var(--muted); font-size: 12px; }
+  .suggest .btn { border-color: var(--accent); background: var(--surface); color: var(--accent); white-space: nowrap; font-size: 13px; padding: 6px 10px; }
+  .suggest .close { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 2px; }
+  .regions .btns { margin-bottom: 6px; }
+  .regions select[hidden] { display: none; }
+  .start select { border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--surface); color: var(--ink); font: inherit; }
   #mic { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand); font-size: 18px; }
   main { flex: 1 1 auto; min-height: 0; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
   main > * { flex-shrink: 0; }
@@ -56,12 +67,55 @@
   .btn:disabled { opacity: .45; cursor: default; }
   .banner { background: var(--accent-soft); color: #9a3412; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .banner .btn { border-color: var(--accent); background: var(--surface); color: var(--accent); padding: 4px 10px; font-size: 13px; }
-  .card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
-  .card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .card .name { font-weight: 700; font-size: 16px; }
-  .card .rank { font-size: 12px; color: var(--muted); }
-  .card .menu { font-size: 17px; font-weight: 800; line-height: 1.35; }
-  .card .total { font-size: 20px; font-weight: 800; color: var(--brand); }
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card { border: 1px solid var(--card-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; background: var(--surface); }
+  .card .name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .card .name { font-weight: 800; font-size: 16px; color: var(--ink); text-decoration: none; }
+  .badge-new { font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; }
+  .card .menu { font-size: 15px; font-weight: 700; margin-top: 4px; }
+  .card .price { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card .price .label { font-size: 13px; color: var(--muted); }
+  .card .total { font-size: 16px; font-weight: 800; color: var(--ink); }
+  .card .met { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .card .note { font-size: 12px; color: var(--muted); }
+  .card .reason { font-size: 13px; line-height: 1.5; margin: 0; color: var(--ink); }
+  .order { display: block; width: 100%; margin-top: 8px; border: 0; border-radius: 8px; padding: 10px; background: var(--dark); color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; cursor: pointer; }
+  .order:disabled { opacity: .6; cursor: default; }
+  .where { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .result-title, .zero-title { font-size: 17px; font-weight: 800; margin: 4px 0 0; }
+  .zero-hint { font-size: 14px; color: var(--muted); margin: -4px 0 0; }
+  .btns.stack { flex-direction: column; }
+  .btns.stack .btn { width: 100%; padding: 14px; font-weight: 700; text-align: center; }
+  .btns.stack .btn.restart { background: var(--dark); color: var(--surface); border-color: var(--dark); }
+  .next-btn { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+  /* 대기 말풍선: 점 세 개가 순서대로 + 단계 문구 */
+  .msg.typing { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
+  .typing .line { display: flex; align-items: center; gap: 8px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite ease-in-out; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+  .typing .slow { font-size: 13px; }
+  /* 스켈레톤: 회색 막대가 은은하게 깜빡임 */
+  .skel { background: var(--line); border-radius: 6px; animation: shimmer 1.4s infinite ease-in-out; }
+  @keyframes shimmer { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+  .skel.bar { height: 38px; border-radius: 10px; }
+  .skel.short { height: 12px; width: 40%; }
+  .skel.line { height: 12px; } .skel.wide { height: 14px; width: 65%; } .skel.btn { height: 38px; border-radius: 8px; }
+  .skel-cards { display: flex; flex-direction: column; gap: 10px; }
+  .skel-card { border: 1px solid var(--card-line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .loading-row { display: flex; flex-direction: column; gap: 8px; }
+  /* 위로 올려 읽는 중에 새 메시지가 오면 */
+  .jump { position: absolute; left: 50%; top: -46px; transform: translateX(-50%); border: 0; border-radius: 999px; padding: 8px 14px; background: var(--dark); color: var(--surface); font: inherit; font-size: 13px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+  .jump[hidden] { display: none; }
+  .step-badge { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+  .chip.step { border-color: var(--brand); color: #346242; }
+  .card .dist { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .card .star { font-size: 12px; color: var(--muted); }
+  .badge-good { font-size: 11px; font-weight: 700; color: var(--brand); border: 1px solid var(--brand); border-radius: 6px; padding: 1px 6px; }
+  .chip.sub { cursor: pointer; }
+  .chip.sub::after { content: '▾'; font-size: 11px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .dots i, .skel { animation: none; } }
   .checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: #346242; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { font-size: 12px; border-radius: 6px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -75,18 +129,14 @@
   .quote-preview { display: block; }
   .quote[open] .quote-preview { display: none; }
   .quote p { margin: 4px 0 0; }
-  .order { border: 0; border-radius: 12px; padding: 10px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
   .noad { font-size: 12px; color: var(--muted); text-align: center; }
   .typing { color: var(--muted); font-size: 13px; }
   .regions { max-width: 100%; }
   .regions select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: var(--surface); color: var(--ink); font: inherit; }
   .category-select { max-width: 125px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
-  .order { text-decoration: none; text-align: center; }
-  .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .card-actions .order { background: var(--brand-soft); color: var(--brand); }
-  .card-actions .btn { font-size: 13px; font-weight: 600; }
   .cart-status { margin: 0; color: var(--muted); font-size: 13px; }
-  form { flex: none; display: flex; gap: 8px; padding: 10px 14px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+  .dock { flex: none; position: relative; z-index: 2; /* jump 버튼 기준 */ background: var(--surface); border-top: 1px solid var(--line); }
+  form { display: flex; gap: 8px; padding: 10px 14px max(12px, env(safe-area-inset-bottom)); background: var(--surface); }
   input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; font: inherit; background: #f1f3f4; color: var(--ink); }
   form button { border: 0; border-radius: 11px; padding: 0 12px; background: #bc4222; color: #fff; font: inherit; font-weight: 750; white-space: nowrap; cursor: pointer; }
   @media (max-width: 450px) {
@@ -99,8 +149,9 @@
   <header>
     <div class="phone-status" aria-hidden="true"><time data-phone-clock>--:--</time><i></i><span>▮▮ 5G ▰</span></div>
     <div class="top">
-      <h1><a href="index.html" aria-label="홈으로" style="color:inherit;text-decoration:none">‹</a> 당겨요 메뉴 추천 <span class="dong" id="dong"></span></h1>
+      <h1><a href="index.html" aria-label="홈으로" style="color:inherit;text-decoration:none">‹</a> 밥파일럿</h1>
       <div class="top-actions">
+        <span class="where" id="dong" aria-live="polite"></span>
         <select id="category" class="category-select" aria-label="추천 카테고리" hidden></select>
         <a id="basket-link" class="cart-link" href="index.html?view=cart&amp;from=recommend">장바구니</a>
       </div>
@@ -109,17 +160,24 @@
     <div class="chips" id="chips"></div>
   </header>
   <main id="log" role="log" aria-label="추천 대화"></main>
+  <div class="dock">
+  <button type="button" class="jump" id="jump" hidden>새 메시지 ↓</button>
+  <div id="suggest" class="suggest" role="status" hidden></div>
   <form id="form">
     <button type="button" id="mic" hidden aria-label="말로 하기">🎤</button>
     <input id="input" aria-label="음식 조건" placeholder="예: 둘이서 바삭한 간장치킨, 프랜차이즈 말고" autocomplete="off" maxlength="300">
     <button>보내기</button>
   </form>
+  </div>
 </div>
 <script type="module">
 import { browserKey, demo, esc, won } from './db.js';
 import { addCartMenus, readCart, setCartAccount } from './cart.js';
 import { customerRequest, reloadOnSessionChange } from './customer-session.js';
 import { heatLevels } from './menu-interview.js';
+import { suggest, fetchWeather, GU } from './suggest.js';
+import { distanceLabel } from './searchRule.js';
+import { DEMO_HOME, homeOf } from './home.js';
 
 const $ = id => document.getElementById(id);
 const log = $('log');
@@ -128,11 +186,47 @@ const { account } = await customerRequest('session').catch(() => ({ account: nul
 setCartAccount(account?.id);
 const SESSION_KEY = 'seoul-recommend-conversation' + (account ? ':' + account.id : '');
 let saved;
-try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { saved = null; }
+// 새로고침이면 처음부터. 장바구니·가게 화면에 갔다가 돌아온 경우(뒤로 가기 등)는 대화를 이어간다.
+const reloaded = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+try {
+  if (reloaded) sessionStorage.removeItem(SESSION_KEY);
+  saved = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+} catch { saved = null; }
 let state = saved?.state ?? null, busy = false, regionSelect;
 const turns = Array.isArray(saved?.turns) ? saved.turns.slice(-40) : [];
 const optionButtons = new Set();
-const scroll = () => log.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+// ---------- 자동 스크롤 ----------
+// 긴 답변(추천 카드)은 답변 시작 위치를 화면 위쪽에, 짧은 메시지·버튼은 맨 아래로.
+// 사용자가 직접 위로 올려 예전 대화를 보고 있으면 따라가지 않고 "새 메시지 ↓"를 띄운다.
+const page = log; // 스크롤은 폰 프레임 안의 <main>에서 일어난다
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const NEAR_BOTTOM_PX = 160;
+let follow = true, restoring = false, holdScroll = 0, userScrollAt = 0, target = null;
+const fromBottom = () => page.scrollHeight - page.scrollTop - page.clientHeight;
+for (const type of ['wheel', 'touchmove', 'keydown']) addEventListener(type, () => { userScrollAt = Date.now(); }, { passive: true });
+page.addEventListener('scroll', () => {
+  const near = fromBottom() < NEAR_BOTTOM_PX;
+  if (near) { follow = true; $('jump').hidden = true; }
+  else if (Date.now() - userScrollAt < 1000) follow = false; // 프로그램이 올린 건 무시, 사용자가 올린 것만
+}, { passive: true });
+function scrollToTarget(smooth) {
+  if (!target?.el.isConnected) return;
+  const top = target.mode === 'start'
+    ? target.el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop - 8
+    : page.scrollHeight;
+  page.scrollTo({ top, behavior: smooth && !reduceMotion.matches && !restoring ? 'smooth' : 'auto' });
+}
+function reveal(el, mode = 'end') {
+  if (!el || holdScroll) return;
+  target = { el, mode, at: Date.now() };
+  resized.disconnect(); resized.observe(el);
+  if (!follow && !restoring) { $('jump').hidden = false; return; }
+  requestAnimationFrame(() => scrollToTarget(true));
+}
+// 이미지가 늦게 로드되는 등 높이가 바뀌면 방금 맞춘 위치를 한 번 더 맞춘다
+const resized = new ResizeObserver(() => { if (target && follow && Date.now() - target.at < 2500) scrollToTarget(false); });
+$('jump').onclick = () => { follow = true; $('jump').hidden = true; scrollToTarget(true); };
+const scroll = () => reveal(log.lastElementChild, 'end');
 
 function remember(turn) {
   turns.push(turn);
@@ -145,17 +239,37 @@ function updateBasketLink() {
   $('basket-link').textContent = count ? `장바구니 ${count}` : '장바구니';
 }
 
+// 오른쪽 상태: 결과 화면이면 "추천 N곳", 그 밖(0곳 화면 등)에는 선택한 동네
+let shownCount = null;
 function updateHeader() {
-  $('dong').textContent = [state?.dong, state?.neighborhood].filter(Boolean).join(' ');
-  if (regionSelect) regionSelect.value = state?.dong || '';
+  $('dong').textContent = shownCount ? `추천 ${shownCount}곳` : [state?.dong, state?.neighborhood].filter(Boolean).join(' ');
+  if (regionSelect) regionSelect.value = state?.neighborhood || '';
   $('category').hidden = !state?.dong || $('category').options.length < 2;
 }
 
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
-const STAGES = [[0, '조건 정리 중…'], [1500, '가게 찾는 중…'], [4000, '추천 이유 정리 중…']];
+const DEFAULT_PLACEHOLDER = '예: 둘이서 바삭한 간장치킨, 프랜차이즈 말고';
+// 서버가 단계를 실시간으로 보내지 않으므로 경과 시간으로 문구를 바꾼다. 마지막 문구에서 멈춰 기다린다.
+const STAGE_MS = [0, 1500, 3500];
+const STAGE_TEXT = ['조건 정리 중', '가게 찾는 중', '추천 이유 정리 중'];
+// 지역 고르기는 추천 이유(AI ③)까지 가지 않으므로 마지막 단계를 생략
+const stagesFor = action => action?.type === 'dong' ? 2 : STAGE_TEXT.length;
+const SKELETON_AFTER_MS = 400;   // 빠른 응답에서 깜빡이지 않게 조금 늦게
+const SLOW_AFTER_MS = 8000;
+// 결과 카드가 나올 가능성이 있는 요청에만 카드 스켈레톤 (지역 고르기는 제외)
+// 카테고리를 바꾸는 요청은 세부 메뉴 버튼이 먼저 나오므로 제외
+const expectsCards = action => action?.type !== 'dong' && !(action?.type === 'apply' && action.cond && 'menu' in action.cond);
+let lockedControls = [];
 function lockForm(on) {
   $('input').readOnly = on;
-  $('form').querySelector('button').disabled = on;
+  $('form').querySelectorAll('button').forEach(b => { b.disabled = on; }); // 🎤·보내기 모두
+  if (on) { // 선택지·칩·추천 문장 버튼도 대기 중엔 막는다
+    lockedControls = [...document.querySelectorAll('#log button, #log select, #chips button, #suggest button, #category')].filter(el => !el.disabled);
+    lockedControls.forEach(el => { el.disabled = true; });
+  } else {
+    lockedControls.filter(el => el.isConnected && !el.dataset.spent).forEach(el => { el.disabled = false; });
+    lockedControls = [];
+  }
 }
 
 function add(html, cls = '') {
@@ -167,15 +281,15 @@ function add(html, cls = '') {
   return el;
 }
 
-function buttons(list, historical = false) {
-  const box = add('', 'btns');
+function buttons(list, historical = false, stack = false) {
+  const box = add('', 'btns' + (stack ? ' stack' : ''));
   for (const b of list) {
     const el = document.createElement('button');
-    el.className = 'btn' + (b.ghost ? ' ghost' : '');
+    el.className = 'btn' + (b.ghost && !stack ? ' ghost' : '') + (stack && b.label === '처음부터' ? ' restart' : '');
     el.textContent = b.label;
-    if (b.change) {
+    if (b.change) { // 2줄(작은 글씨): 바뀌는 조건
       const sub = document.createElement('small');
-      sub.textContent = `${b.change.what} ${b.change.from} → ${b.change.to}`;
+      sub.textContent = `${[b.change.label, b.change.from].filter(Boolean).join(' ')} → ${b.change.to}`;
       el.appendChild(sub);
     }
     if (b.action?.type === 'option') {
@@ -210,6 +324,10 @@ function renderChips(chips = []) {
     el.className = 'chip' + (c.accent ? ' accent' : '') + (c.kind === 'price' || c.kind === 'menu' ? ' ' + c.kind : '');
     el.textContent = c.label;
     if (c.kind === 'price') { el.title = '눌러서 예산 바꾸기'; el.onclick = e => { if (e.target === el) budgetButtons(); }; }
+    if (c.kind === 'sub') { // 눌러서 세부 메뉴 다시 고르기, ×는 상관없어요
+      el.classList.add('sub'); el.title = '눌러서 세부 메뉴 바꾸기';
+      el.onclick = e => { if (e.target === el && !busy) void send(c.change, `${c.label} 바꾸기`); };
+    }
     if (c.kind === 'menu' && categories.length) {
       el.title = '눌러서 음식 바꾸기';
       el.onclick = e => { if (e.target === el) buttons(categories.filter(x => x !== c.label).map(x => ({ label: x, action: { type: 'apply', cond: { menu: x } } }))); };
@@ -232,52 +350,38 @@ function menuIntro({ quote, menuDescription }) {
   if (description.length <= QUOTE_MAX) return `<div class="quote"><small>사장님 메뉴 소개</small>“${esc(description)}”</div>`;
   return `<details class="quote"><summary><small>사장님 메뉴 소개</small><span class="quote-preview">“${esc(short(quote || description, QUOTE_MAX))}”</span></summary><p>${esc(description)}</p></details>`;
 }
-
-function card(c, i, common = []) {
+const sentence = text => !text ? '' : /[.!?。]$/.test(text) ? text : text + '.';
+function card(c) {
   const params = new URLSearchParams({ store: c.storeId, from: 'recommend' });
   if (c.menuId) params.set('menu', c.menuId);
+  const menu = (c.items ?? [{ name: c.menu, qty: c.qty }]).map(line =>
+    esc(line.name) + (c.items || line.qty > 1 ? ' × ' + esc(line.qty) : '')).join(' + ');
+  // 설계엔 없지만 숨기면 오해가 생기는 안내만 한 줄로 (예산 초과, 일부 조건만 맞음)
   const heat = heatLevels.find(level => level.number === c.heat);
-  const tags = [
-    c.foodLabel && `<span class="tag">${esc(c.foodLabel)} 후보</span>`,
-    c.setMenu && '<span class="tag">세트 메뉴</span>',
-    c.portionNote && `<span class="tag">${esc(c.portionNote)}</span>`,
-    heat && `<span class="tag">맵기 ${heat.number}/5 · ${esc(heat.example)} 정도</span>`,
-    c.valueLabel && `<span class="tag">${esc(c.valueLabel)}</span>`,
-    c.isGoodPrice && '<span class="tag">착한가게</span>',
-    c.isNew && `<span class="tag new">새로 생긴 가게</span>`,
-    c.budgetNote && `<span class="tag partial">${esc(c.budgetNote)}</span>`,
-    c.partial && `<span class="tag partial">일부 조건만 맞아요</span>`,
-  ].filter(Boolean).join('');
-  const own = c.checks.filter(x => !common.includes(x));
-  return `<div class="card">
-    <div class="menu">${(c.items ?? [{ name: c.menu, qty: c.qty }]).map(line =>
-      esc(line.name) + (c.items || line.qty > 1 ? ' × ' + esc(line.qty) : '')).join(' + ')}</div>
-    <div class="total">${won(c.total)} <span class="rank">예상 총액 · 배달비 포함</span></div>
-    <div class="head"><span class="name">${esc(c.name)}</span><span class="rank">${c.score ? (i + 1) + '위 · ' : ''}${c.rating ? '★ ' + esc(c.rating) : '평점 정보 없음'}</span></div>
-    ${own.length ? `<div class="checks">${own.map(x => '✓ ' + esc(x)).join(' ')}</div>` : ''}
-    ${tags ? `<div class="tags">${tags}</div>` : ''}
-    ${c.reason ? `<div class="reason">${esc(c.reason)}</div>` : ''}
+  const note = [heat && `맵기 ${heat.number}/5 · ${heat.example} 정도`, c.budgetNote, c.partial && '일부 조건만 맞아요'].filter(Boolean).join(' · ');
+  const store = `index.html?${esc(params.toString())}`;
+  return `<article class="card">
+    <div class="name-row"><a class="name" href="${store}" title="가게·메뉴 보기">${esc(c.name)}</a>${c.isNew || c.rating == null ? '<span class="badge-new">신규</span>' : `<span class="star">★ ${esc(c.rating)}</span>`}${c.isGoodPrice ? '<span class="badge-good">착한가게</span>' : ''}${c.distanceKm != null ? `<span class="dist">${esc(distanceLabel(c.distanceKm))}</span>` : ''}</div>
+    <div class="menu">${menu}</div>
+    <div class="price"><span class="label">배달팁 포함 총액</span><b class="total">${won(c.total)}</b></div>
+    ${note ? `<div class="note">${esc(note)}</div>` : ''}
+    ${c.reason ? `<p class="reason">${esc(sentence(c.reason))}</p>` : ''}
     ${menuIntro(c)}
-    <div class="card-actions">
-      <a class="order" href="index.html?${esc(params.toString())}">가게·메뉴 보기</a>
-      ${c.menuId ? '<button type="button" class="btn add-recommendation">장바구니 담기</button>' : ''}
-    </div>
+    ${c.menuId ? '<button type="button" class="order add-recommendation">주문하기</button>' : `<a class="order" href="${store}">주문하기</a>`}
     <p class="cart-status" role="status" hidden></p>
-  </div>`;
+  </article>`;
 }
 
 let addingMenu = false;
 function renderCards(cards) {
   // 모든 카드에 똑같은 ✓는 위에 한 번만, 카드엔 그 가게만 다른 항목
-  const common = cards.length > 1 ? cards[0].checks.filter(x => cards.every(c => c.checks.includes(x))) : [];
-  if (common.length) add(`${cards.length === 3 ? '세' : cards.length} 곳 모두: ${common.map(x => '✓ ' + esc(x)).join(' · ')}`, 'common');
-  const wrap = add(cards.map((c, i) => card(c, i, common)).join(''), 'cards');
+  const wrap = add(cards.map(card).join(''), 'cards');
   [...wrap.children].forEach((element, index) => {
     const button = element.querySelector('.add-recommendation');
     if (!button) return;
     const item = cards[index];
     const status = element.querySelector('.cart-status');
-    button.setAttribute('aria-label', item.items ? '메뉴 조합 장바구니 담기' : `${item.menu} 장바구니 담기`);
+    button.setAttribute('aria-label', `${item.name} ${item.items ? '메뉴 조합' : item.menu} 주문하기 (장바구니에 담기)`);
     button.onclick = async () => {
       if (addingMenu) return;
       addingMenu = true;
@@ -321,6 +425,15 @@ function feedback() {
 }
 
 function render(r, historical = false) {
+  const startAt = log.children.length;
+  holdScroll++; // 답변을 다 그린 뒤 한 번만 스크롤
+  try { renderReply(r, historical); } finally { holdScroll--; }
+  const first = log.children[startAt];
+  if (r.cards?.length || r.selected) reveal(first, 'start'); // 카드는 답변 시작부터 읽게
+  else reveal(log.lastElementChild, 'end');
+}
+
+function renderReply(r, historical) {
   renderChips(r.chips);
   if (!r.preserveResults) {
     $('remain').textContent = '';
@@ -333,15 +446,30 @@ function render(r, historical = false) {
     btn.onclick = budgetButtons;
     b.appendChild(btn);
   }
+  if (r.title) add(esc(r.title), 'zero-title');
+  if (r.hint) add(esc(r.hint), 'zero-hint');
   if (r.text) add(esc(r.text), 'msg bot');
   if (r.cards?.length) {
     renderCards(r.cards);
-    if (!r.lookup) add('광고 없이 조건으로만 골랐어요', 'noad');
+    if (r.nextButton) {
+      const next = add('', 'next');
+      const btn = next.appendChild(document.createElement('button'));
+      btn.type = 'button'; btn.className = 'next-btn'; btn.textContent = r.nextButton.label;
+      if (historical) btn.disabled = true;
+      btn.onclick = async () => {
+        if (busy) return;
+        btn.disabled = true;
+        if (await send(r.nextButton.action, r.nextButton.label)) btn.dataset.spent = '1'; else btn.disabled = false;
+      };
+    }
     if (!historical && !r.lookup) feedback();
   }
   if (r.selected) renderCards([r.selected]);
   if (r.followUp) add(esc(r.followUp), 'msg bot');
-  if (r.buttons?.length) buttons(r.buttons, historical);
+  if (r.buttons?.length) buttons(r.buttons, historical, r.zero);
+  if (!r.preserveResults && !historical) { shownCount = r.cards?.length && !r.lookup ? r.cards.length : null; updateHeader(); }
+  $('input').placeholder = r.placeholder ?? DEFAULT_PLACEHOLDER;
+  if (r.focusInput && !historical) $('input').focus({ preventScroll: true });
 }
 
 async function send(action, echo) {
@@ -349,18 +477,34 @@ async function send(action, echo) {
   if (busy) return;
   busy = true;
   lockForm(true);
+  follow = true; // 손님이 보낸 직후엔 다시 따라간다
   if (echo) add(esc(echo), 'msg user');
-  const wait = add(esc(STAGES[0][1]), 'typing');
-  // 서버는 한 번에 응답하므로 경과 시간으로 단계 문구를 바꾼다
-  const timers = STAGES.slice(1).map(([ms, text]) => setTimeout(() => { wait.textContent = text; }, ms));
+  const wait = add('<span class="line"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="stage"></span></span>', 'msg bot typing');
+  wait.setAttribute('role', 'status'); wait.setAttribute('aria-live', 'polite');
+  const stage = wait.querySelector('.stage');
+  let skeleton = null;
+  const timers = [
+    ...STAGE_MS.slice(0, stagesFor(action)).map((ms, i) => setTimeout(() => { stage.textContent = STAGE_TEXT[i]; }, ms)),
+    setTimeout(() => {
+      const slow = wait.appendChild(document.createElement('span'));
+      slow.className = 'slow'; slow.textContent = '조금만 더 기다려 주세요. 가게가 많아서 꼼꼼히 보고 있어요';
+      scroll();
+    }, SLOW_AFTER_MS),
+    ...(expectsCards(action) ? [setTimeout(() => {
+      skeleton = add(Array.from({ length: 3 }, () => '<div class="skel-card"><div class="skel short"></div><div class="skel wide"></div><div class="skel line"></div><div class="skel line"></div><div class="skel btn"></div></div>').join(''), 'skel-cards');
+      skeleton.setAttribute('aria-hidden', 'true');
+    }, SKELETON_AFTER_MS)] : []),
+  ];
+  stage.textContent = STAGE_TEXT[0];
+  const clearWaiting = () => { timers.forEach(clearTimeout); wait.remove(); skeleton?.remove(); };
   try {
     const res = await fetch('/api/recommend', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ state, action, browserKey: browserKey() }),
     });
     const data = await res.json();
-    wait.remove();
-    if (DEBUG && data.timing) add(esc(Object.entries(data.timing).map(([k, v]) => `${k} ${v}ms`).join(' · ') + ` · ${data.provider}`), 'typing');
+    clearWaiting();
+    if (DEBUG && data.timing) add(esc(Object.entries(data.timing).map(([k, v]) => `${k} ${v}ms`).join(' · ') + ` · ${data.provider}`), 'debug-timing');
     if (!res.ok) {
       const error = data.error || '오류가 났어요.';
       add(esc(error), 'msg bot');
@@ -368,37 +512,89 @@ async function send(action, echo) {
       return;
     }
     if (state?.pending !== data.state?.pending && JSON.stringify(state?.pending) !== JSON.stringify(data.state?.pending)) {
-      for (const button of optionButtons) button.disabled = true;
+      for (const button of optionButtons) { button.disabled = true; button.dataset.spent = '1'; }
       optionButtons.clear();
     }
+    const prevDong = state?.dong;
     state = data.state;
     updateHeader();
+    if (state?.dong !== prevDong) void refreshSuggest();
     render(data.reply);
     remember({ echo, reply: data.reply });
     return true;
   } catch {
-    wait.remove();
+    clearWaiting();
     add('서버에 연결하지 못했어요.', 'msg bot');
     remember({ echo, error: '서버에 연결하지 못했어요.' });
-  } finally { timers.forEach(clearTimeout); busy = false; lockForm(false); }
+  } finally { clearWaiting(); busy = false; lockForm(false); }
 }
 
-$('form').onsubmit = e => {
+$('form').onsubmit = async e => {
   e.preventDefault();
   const t = $('input').value.trim();
-  if (!t) return;
+  if (!t || busy) return;
   $('input').value = '';
+  // 배달받을 동을 아직 안 골랐으면 등록 주소(현재 위치)로 먼저 정한다. 문장에 동 이름을 말했으면 그게 우선이다.
+  const named = dongList.some(d => t.includes(d.dong));
+  if (!state?.neighborhood && !named) {
+    const h = home();
+    if (!await send(homeAction(), `현재 위치 (${h.dong} ${h.neighborhood})`)) return;
+  }
   send({ type: 'text', text: t }, t);
 };
 
-const EXAMPLES = ['혼자 먹어요', '둘이 먹어요', '2만 원 이하', '가성비', '프랜차이즈 말고', '매운 거'];
+// ---------- 상황 추천: 위치·날씨·시간·나이대 → 입력창 위 한 줄 ----------
+const AGE_GROUP = '20대'; // 데모 대상 고정
+const ctx = { gu: DEMO_HOME.dong, weather: new Map(), closed: false }; // 날씨는 고른 구, 없으면 등록 주소의 구
+
+async function refreshSuggest() {
+  const box = $('suggest');
+  if (ctx.closed) return;
+  // 지금 고른 지역(장소 변경 포함) → 위치 권한으로 찾은 구 → 없음(서울 날씨)
+  const gu = GU[state?.dong] ? state.dong : ctx.gu;
+  // 날씨 조회에 실패하면 저장하지 않고 다음에 다시 시도한다 (실패가 굳어 시간대만으로 고르는 것을 막음)
+  if (!ctx.weather.get(gu)) { const w = await fetchWeather(gu); if (w) ctx.weather.set(gu, w); }
+  const weather = ctx.weather.get(gu) ?? null;
+  const s = suggest({ hour: new Date().getHours(), ...weather, ageGroup: AGE_GROUP });
+  // 고른 근거를 그대로 보여준다: 위치 · 날씨 · 시간대 · 나이대
+  const WHY = { cold: '추움', hot: '더움', rain: '비', morning: '아침', lunch: '점심', dinner: '저녁', night: '밤 시간' };
+  const info = [(state?.neighborhood || gu) && '📍 ' + (state?.neighborhood || gu),
+    weather ? `${Math.round(weather.tempC)}°C` : '날씨 확인 안 됨',
+    '근거: ' + s.reasons.map(r => WHY[r] ?? r).join(' · ')].filter(Boolean).join(' · ');
+  box.innerHTML = `<div class="say"><b>${esc(s.line)}</b>${info ? `<small>${esc(info)}</small>` : ''}</div>`;
+  const go = document.createElement('button');
+  go.type = 'button'; go.className = 'btn'; go.textContent = `${s.dish} 추천 받기`;
+  go.onclick = async () => {
+    if (!state?.neighborhood) {
+      const h = home();
+      if (!await send(homeAction(), `현재 위치 (${h.dong} ${h.neighborhood})`)) return;
+    }
+    void send({ type: 'text', text: `${state.neighborhood} ${s.dish}` }, `${s.dish} 추천해줘`);
+  };
+  const close = document.createElement('button');
+  close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', '추천 문장 닫기');
+  close.onclick = () => { ctx.closed = true; box.hidden = true; };
+  box.append(go, close);
+  box.hidden = false;
+}
+
+// 정확한 좌표는 이 기기 밖으로 보내지 않는다: 가장 가까운 구만 쓰고, 날씨도 그 구 중심 좌표로 조회
+
+const EXAMPLES = ['혼자 먹어요', '둘이 먹어요', '2만 원 이하', '가성비', '프랜차이즈 말고', '착한가게', '매운 거'];
 let categories = [];
+let dongList = []; // [{ dong, gu, lat, lon }]
+const dongAction = d => ({ type: 'dong', dong: d.gu, neighborhood: d.dong });
+// [현재 위치] = 등록 배달 주소 (없으면 시연 기본 주소 광진구 화양동). 브라우저 위치는 쓰지 않는다.
+const home = () => homeOf(dongList);
+const homeAction = () => ({ type: 'dong', ...home() });
 async function chooseRegion() {
   const start = add('', 'start');
   const box = start.appendChild(document.createElement('b'));
-  box.textContent = '지역을 불러오는 중…';
+  box.textContent = '추천 준비 중…';
   const row = start.appendChild(document.createElement('div'));
   row.className = 'regions';
+  // 지역·카테고리 목록을 불러오는 동안 자리 표시
+  row.innerHTML = '<div class="loading-row" role="status" aria-live="polite" aria-label="추천 준비 중"><div class="skel bar"></div><div class="skel short"></div></div>';
   const step2 = start.appendChild(document.createElement('b'));
   step2.textContent = '② 먹고 싶은 음식 말하기';
   const examples = start.appendChild(document.createElement('div'));
@@ -412,8 +608,10 @@ async function chooseRegion() {
   try {
     const response = await fetch('/api/recommend');
     const data = await response.json();
-    if (!response.ok || !data.regions?.length) throw new Error('Missing regions');
+    if (!response.ok || !data.dongs?.length) throw new Error('Missing dongs');
     categories = data.categories ?? [];
+    dongList = data.dongs;
+    if (home().dong !== ctx.gu) { ctx.gu = home().dong; void refreshSuggest(); }
     const categorySelect = $('category');
     categorySelect.replaceChildren(new Option('카테고리 변경', ''));
     for (const category of categories) categorySelect.add(new Option(category, category));
@@ -423,23 +621,48 @@ async function chooseRegion() {
       if (value && !busy) void send({ type: 'apply', cond: { menu: value } }, value);
     };
     box.textContent = '① 배달받을 동네';
+    row.replaceChildren();
+    const choices = row.appendChild(document.createElement('div'));
+    choices.className = 'btns';
+    const here = choices.appendChild(document.createElement('button'));
+    here.type = 'button'; here.className = 'btn'; here.textContent = '📍 현재 위치';
+    const change = choices.appendChild(document.createElement('button'));
+    change.type = 'button'; change.className = 'btn ghost'; change.textContent = '장소 변경';
     const select = document.createElement('select');
     regionSelect = select;
+    select.hidden = true;
     select.setAttribute('aria-label', '추천 지역');
-    select.add(new Option('지역 선택', ''));
-    for (const region of data.regions) select.add(new Option(region, region));
-    select.add(new Option('서울 전체', '서울 전체'));
+    const openList = () => { select.hidden = false; select.focus(); };
+    change.onclick = openList;
+    here.onclick = async () => {
+      if (busy) return;
+      const h = home();
+      select.value = h.neighborhood; select.hidden = true;
+      await send(homeAction(), `현재 위치 (${h.dong} ${h.neighborhood})`);
+    };
+    // 배달받을 동: 구별로 묶은 동 목록 (동 이름은 법정동, 같은 이름이 있으면 "신사동(은평구)")
+    select.add(new Option('동 선택', ''));
+    const byGu = Map.groupBy ? Map.groupBy(dongList, d => d.gu) : dongList.reduce((m, d) => m.set(d.gu, [...(m.get(d.gu) ?? []), d]), new Map());
+    for (const gu of [...byGu.keys()].sort((a, b) => a.localeCompare(b, 'ko'))) {
+      const group = document.createElement('optgroup');
+      group.label = gu;
+      for (const d of byGu.get(gu)) group.appendChild(new Option(d.dong, d.dong));
+      select.appendChild(group);
+    }
     select.onchange = async () => {
       if (!select.value || busy) return;
       select.disabled = true;
-      const action = select.value === '서울 전체' ? { type: 'text', text: select.value } : { type: 'dong', dong: select.value };
-      if (!await send(action, select.value)) select.value = state?.dong || '';
+      const d = dongList.find(x => x.dong === select.value);
+      if (!await send(dongAction(d), d.dong)) select.value = state?.neighborhood || '';
+      else select.hidden = true;
       select.disabled = false;
     };
     row.appendChild(select);
+    if (state?.neighborhood) select.value = state.neighborhood;
     updateHeader();
   } catch {
-    box.textContent = '지역을 불러오지 못했어요.';
+    box.textContent = '불러오지 못했어요.';
+    row.replaceChildren();
     const retry = document.createElement('button');
     retry.className = 'btn';
     retry.textContent = '다시 시도';
@@ -463,12 +686,16 @@ if (Speech) {
 }
 
 void chooseRegion();
+void refreshSuggest();
 const activeReply = turns.findLastIndex(turn => turn.reply);
+restoring = true;
 turns.forEach(({ echo, reply, error }, index) => {
   if (echo) add(esc(echo), 'msg user');
   if (reply) render(reply, index !== activeReply || !state?.pending);
   else if (error) add(esc(error), 'msg bot');
 });
+if (turns.length) { target = { el: log.lastElementChild, mode: 'end', at: Date.now() }; page.scrollTo({ top: page.scrollHeight, behavior: 'auto' }); }
+restoring = false;
 updateHeader();
 updateBasketLink();
 window.addEventListener('pageshow', updateBasketLink);

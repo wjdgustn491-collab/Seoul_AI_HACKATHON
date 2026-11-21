@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createLLM, validate } from '../lib/llm/index.js';
 import { PARSE_SCHEMA } from '../lib/prompts.js';
 
-const good = { menu: '치킨', dish: null, people: 2, budget: null, budget_unit: 'total', price_pref: null, taste: ['간장'], franchise: 'none' };
+// 맥락 필드(eaten·avoid·meal_time·season·delivery_tip_max)도 required (nullable)
+const good = { menu: '치킨', dish: null, people: 2, budget: null, budget_unit: 'total', price_pref: null, taste: ['간장'], franchise: 'none',
+  eaten: [], avoid: [], meal_time: null, season: null, delivery_tip_max: null };
 const fake = replies => {
   const calls = [];
   return { calls, provider: { name: 'fake', available: true, async complete(req) { calls.push(req); const r = replies.shift(); if (r instanceof Error) throw r; return r; } } };
@@ -57,4 +59,29 @@ test('시간 예산이 1초 미만이면 AI를 부르지 않는다', async () =>
   const ai = createLLM({}, { provider: f.provider, deadline: Date.now() + 500 });
   await assert.rejects(ai.parse('x', {}));
   assert.equal(f.calls.length, 0);
+});
+
+test('LLM_PROVIDER=none이면 키가 있어도 AI를 부르지 않는다', async () => {
+  const ai = createLLM({ LLM_PROVIDER: 'none', GEMINI_API_KEY: 'x' });
+  assert.equal(ai.provider, 'none');
+  await assert.rejects(ai.parse('x', {}), /LLM unavailable/);
+  assert.equal(ai.used, false);
+});
+
+test('[맥락] PARSE_SCHEMA: 먹은 것·피할 것·끼니·계절·배달팁', () => {
+  const context = { ...good, menu: null, eaten: [{ meal: 'breakfast', menu: '한식', dish: '국밥' }, { meal: 'lunch', menu: '도시락·죽', dish: '도시락' }],
+    avoid: [{ menu: '피자', dish: null }], meal_time: 'dinner', season: 'winter', delivery_tip_max: 0 };
+  assert.equal(validate(context, PARSE_SCHEMA), null);
+  assert.match(validate({ ...context, season: 'spring' }, PARSE_SCHEMA), /season/);
+  assert.match(validate({ ...context, meal_time: 'brunch' }, PARSE_SCHEMA), /meal_time/);
+  assert.match(validate({ ...context, eaten: [{ meal: 'lunch', menu: '라면집', dish: null }] }, PARSE_SCHEMA), /eaten\[0\]\.menu/);
+  assert.match(validate({ ...context, delivery_tip_max: 1.5 }, PARSE_SCHEMA), /delivery_tip_max/);
+  const { eaten, ...missing } = context;
+  assert.match(validate(missing, PARSE_SCHEMA), /eaten/);
+});
+
+test('[맥락] RECOMMENDATION_MODE=rules면 키가 있어도 AI를 부르지 않는다', async () => {
+  const ai = createLLM({ RECOMMENDATION_MODE: 'rules', GEMINI_API_KEY: 'x' });
+  assert.equal(ai.provider, 'none');
+  await assert.rejects(ai.parse('x', {}), /LLM unavailable/);
 });
