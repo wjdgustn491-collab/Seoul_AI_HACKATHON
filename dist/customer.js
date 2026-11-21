@@ -148,7 +148,6 @@ function categoryImage(id) {
 
 function home() {
   const cats = [...state.categories.slice(0, 8), { id: "nearby", name: "주변 가게" }, { id: "more", name: "더보기" }];
-  const shortcuts = ["무료배달", "온누리/지역화폐", "포장/매장식사", "전국 휴게소"];
   const address = activeAddress();
   return '<section class="home-screen"><h1 class="home-brand">당겨요</h1><header class="home-head">' +
     '<button class="address-button" data-act="addresses"><span class="pin" aria-hidden="true"></span><strong>' +
@@ -158,9 +157,7 @@ function home() {
     (cart().length ? '<span class="count">' + itemCount(cart()) + '</span>' : '') + '</button></header>' +
     '<button class="home-search" data-act="search"><span class="glass" aria-hidden="true"></span>음식이나 가게를 검색해 보세요</button>' +
     '<section class="category-grid" aria-label="음식 카테고리">' +
-    cats.map(cat => '<button data-act="category" data-value="' + esc(cat.id) + '">' + categoryImage(cat.id) + '<span>' + esc(cat.name) + '</span></button>').join("") + '</section>' +
-    '<section class="shortcut-grid" aria-label="서비스 바로가기">' +
-    shortcuts.map(label => '<button disabled>' + esc(label) + '</button>').join("") +
+    cats.map(cat => '<button data-act="category" data-value="' + esc(cat.id) + '">' + categoryImage(cat.id) + '<span>' + esc(cat.name) + '</span></button>').join("") +
     '</section></section>';
 }
 
