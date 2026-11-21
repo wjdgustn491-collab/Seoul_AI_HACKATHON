@@ -1,5 +1,6 @@
 import { count, date, demo, esc, readLocal, saveLocal, statusLabels, won } from "./db.js";
 import { addCartMenu, readCart as cart, setCartAccount, writeCart } from "./cart.js";
+import { matchesOrderableStore } from "./recommend-catalog.js";
 import { customerData, customerRequest, notifySessionChange, reloadOnSessionChange } from "./customer-session.js";
 import { AGREEMENT_VERSION, entryTerms, finalTerms, koreanAgeAtSignup, signupDetailsError } from "./signup.js";
 import { mountAddressPicker } from "./address-picker.js";
@@ -281,6 +282,7 @@ async function syncCart() {
   const ids = [...new Set(rows.map(row => row.store_id))].filter(id => getStore(id)?.is_open);
   await Promise.all(ids.map(loadMenus));
   writeCart(rows.flatMap(row => {
+    if (row.catalogOnly) return [row];
     const store = getStore(row.store_id);
     const item = menusFor(row.store_id).find(menu => menu.id === row.id);
     return store?.is_open && item ? [{ ...row, ...item, store_name: store.name }] : [];
@@ -291,15 +293,20 @@ function basket() {
   const rows = cart();
   if (!rows.length) return top("장바구니") + empty("장바구니에 담긴 메뉴가 없습니다.");
   const groups = [...new Set(rows.map(row => row.store_id))];
-  const selected = rows.filter(row => row.selected);
+  const selected = rows.filter(row => row.selected && !row.catalogOnly);
   return top("장바구니") + '<section class="pane stack">' + groups.map(id => {
     const store = getStore(id);
-    return '<article class="basket-group"><h2>' + esc(store?.name || rows.find(row => row.store_id === id).store_name) + '</h2>' +
-      rows.filter(row => row.store_id === id).map(item => '<div class="basket-item"><label><input type="checkbox" data-select="' + esc(item.id) + '"' +
-        (item.selected ? " checked" : "") + '><span><strong>' + esc(item.name) + '</strong><small>' + won(item.price * item.quantity) +
-        '</small></span></label><div class="quantity">' + button("−", "minus", item.id, "mini") + item.quantity +
+    const items = rows.filter(row => row.store_id === id);
+    const first = items[0];
+    const fee = store?.delivery_fee ?? first.deliveryFee;
+    return '<article class="basket-group"><h2>' + esc(store?.name || first.store_name) + '</h2>' +
+      items.map(item => '<div class="basket-item"><label>' +
+        (item.catalogOnly ? '' : '<input type="checkbox" data-select="' + esc(item.id) + '"' + (item.selected ? " checked" : "") + '>') +
+        '<span><strong>' + esc(item.name) + '</strong><small>' + won(item.price * item.quantity) +
+        (item.catalogOnly ? ' · 추천 목록 전용' : '') + '</small></span></label><div class="quantity">' + button("−", "minus", item.id, "mini") + item.quantity +
         button("+", "plus", item.id, "mini") + '</div>' + button("삭제", "remove", item.id, "plain muted") + '</div>').join("") +
-      '<p class="muted">배달비 ' + (store ? won(store.delivery_fee) : "확인 필요") + '</p></article>';
+      '<p class="muted">배달비 ' + (fee == null ? "확인 필요" : won(fee)) + '</p>' +
+      (first.catalogOnly ? '<small>추천 목록의 메뉴는 장바구니에서 확인할 수 있어요. 주문은 주문용 목록의 메뉴에서 이용해 주세요.</small>' : '') + '</article>';
   }).join("") + '<div class="spread"><strong>선택한 메뉴 금액</strong><strong>' + won(cost(selected)) + '</strong></div>' +
   '<div class="spread"><span>배달 주소</span>' + button(activeAddress()?.road || "주소 등록", "addresses") + '</div></section>';
 }
@@ -445,7 +452,7 @@ function render(reset = false) {
     else node.removeAttribute("aria-current");
   });
   const rows = route.name === "store" ? cart().filter(item => item.store_id === route.value && getStore(route.value)?.is_open) :
-    route.name === "cart" ? cart().filter(item => item.selected) : [];
+    route.name === "cart" ? cart().filter(item => item.selected && !item.catalogOnly) : [];
   const fee = route.name === "cart" ? [...new Set(rows.map(item => item.store_id))].reduce((sum, id) => sum + (getStore(id)?.delivery_fee || 0), 0) : 0;
   bar.innerHTML = rows.length ? '<button class="primary checkout-button" data-act="' + (route.name === "store" ? "cart" : "checkout") +
     '"><span class="checkout-count">' + itemCount(rows) + '</span><strong>' + won(cost(rows) + fee) +
@@ -484,7 +491,7 @@ async function checkout() {
     render();
     throw new Error("메뉴 구성이나 가격이 변경됐습니다. 확인 후 다시 주문해 주세요.");
   }
-  const rows = cart().filter(row => row.selected);
+  const rows = cart().filter(row => row.selected && !row.catalogOnly);
   if (!rows.length) return;
   const idList = [...new Set(rows.map(row => row.store_id))];
   if (idList.length !== 1) throw new Error("한 번에 한 가게의 메뉴만 선택해 주세요.");
@@ -713,8 +720,11 @@ try {
       open("signin");
     }
   } else if (fromRecommendation) {
-    if (getStore(linkedStore)) await loadMenus(linkedStore);
-    route = linkedStore ? { name: "store", value: linkedStore } : { name: "cart" };
+    const store = getStore(linkedStore);
+    const sourceDong = entryParams.get("catalogDong");
+    const matchingStore = store && (!sourceDong || matchesOrderableStore(store, entryParams.get("catalogName"), sourceDong));
+    if (matchingStore) await loadMenus(linkedStore);
+    route = linkedStore ? { name: "store", value: matchingStore ? linkedStore : null } : { name: "cart" };
     render(true);
     const linkedMenu = entryParams.get("menu");
     if (linkedStore && linkedMenu) screen.querySelector('[data-menu-id="' + CSS.escape(linkedMenu) + '"]')?.scrollIntoView({ block: "center" });

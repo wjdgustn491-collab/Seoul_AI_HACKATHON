@@ -33,6 +33,62 @@ const catTurn = async (engine, state, menu, ai = noGemini) =>
   skipSub(engine, await engine.handle(state, { type: 'apply', cond: { menu } }, ai), ai);
 const cards = turn => turn.reply.cards?.map(c => c.storeId) ?? [];
 
+test('staged recommendations ask about ambiguous groups, infer a date and allow going back', async () => {
+  const engine = createEngine(snapshot, { guided: true });
+  const step = (turn, action) => engine.handle(turn?.state, { ...action, staged: true }, noGemini);
+  const start = await step(null, { type: 'dong', dong: '강남구' });
+  assert.equal(start.state.flowStage, 'people');
+  const group = await step(start, { type: 'text', text: '친구들과 모임이 있어' });
+  assert.equal(group.state.flowStage, 'people');
+  assert.equal(group.state.cond.people, null);
+  const date = await step(group, { type: 'text', text: '데이트' });
+  assert.equal(date.state.cond.people, 2);
+  assert.equal(date.state.flowStage, 'menu');
+  const pizza = await step(date, { type: 'apply', cond: { menu: '피자' } });
+  assert.equal(pizza.state.flowStage, 'taste');
+  const budget = await step(pizza, { type: 'text', text: '맛은 상관없어요' });
+  assert.equal(budget.state.flowStage, 'budget');
+  const rewind = await step(budget, { type: 'stage', stage: 'menu' });
+  assert.equal(rewind.state.flowStage, 'menu');
+  assert.equal(rewind.state.cond.people, 2);
+  assert.equal(rewind.state.cond.menu, null);
+  assert.equal(rewind.state.cond.budget, null);
+});
+
+test('staged budgets offer the nearest total and return to taste if there is no price that works', async () => {
+  const engine = createEngine(snapshot, { guided: true });
+  const step = (turn, action) => engine.handle(turn?.state, { ...action, staged: true }, noGemini);
+  const start = await step(null, { type: 'dong', dong: '강남구' });
+  const setup = await step(start, { type: 'apply', cond: { people: 1, menu: '피자' } });
+  const budget = await step(setup, { type: 'apply', flowAnswer: 'skipTaste' });
+  const low = await step(budget, { type: 'text', text: '1만 원' });
+  const raise = low.reply.buttons.find(b => b.action.flowAnswer === 'raiseBudget');
+  assert.equal(raise.action.cond.budget, 19000);
+  const result = await step(low, raise.action);
+  assert.equal(result.reply.cards[0].total, 19000);
+  const impossible = await step(result, { type: 'apply', cond: { taste: ['바삭'], budget: 10000 } });
+  assert.equal(impossible.state.flowStage, 'taste');
+  assert.match(impossible.reply.text, /예산을 늘려도/);
+});
+
+test('staged extra questions only promise included sides supported by eligible menus', async () => {
+  const stores = Array.from({ length: 8 }, (_, i) => ({
+    id: `shop-${i}`, name: `동네통닭 ${i}`, category: '치킨', region: '서초구', dong: '서초4동', tip: 1000, rating: 4.5,
+  }));
+  const menus = stores.map(({ id }, i) => ({
+    id: `${id}-menu`, store: id, name: '후라이드 치킨', price: 15000, desc: i === 0 ? '바삭한 치킨, 콜라 포함' : '바삭한 치킨',
+  }));
+  const engine = createEngine({ stores, menus }, { guided: true });
+  const first = await engine.handle(null, { type: 'dong', dong: '서초구', staged: true }, noGemini);
+  const extra = await engine.handle(first.state, { type: 'apply', cond: { people: 1, menu: '치킨', taste: ['바삭'] } }, noGemini);
+  assert.equal(extra.state.flowStage, 'extra');
+  assert.equal(extra.reply.buttons.length, 2);
+  const budget = await engine.handle(extra.state, extra.reply.buttons[0].action, noGemini);
+  assert.equal(budget.state.flowStage, 'budget');
+  const result = await engine.handle(budget.state, { type: 'apply', cond: { budget: 20000 } }, noGemini);
+  assert.deepEqual(cards(result), ['shop-0']);
+});
+
 test('recommends only open catalog stores and marks good-price stores in new categories', async () => {
   const data = {
     stores: [

@@ -24,7 +24,16 @@
   .phone-status i { position: absolute; left: 50%; transform: translateX(-50%); width: 89px; height: 24px; border-radius: 50px; background: #141615; }
   .top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; min-height: 44px; }
   .top-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
-  .cart-link { padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; color: var(--brand); font-size: 12px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+  .cart-link, .add-recommendation { display: inline-flex; align-items: center; justify-content: center; min-width: 35px; min-height: 35px; gap: 4px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--brand); font: inherit; font-size: 12px; font-weight: 750; text-decoration: none; }
+  .cart-link img, .add-recommendation img { width: 21px; height: 21px; }
+  .add-recommendation { cursor: pointer; background: var(--brand-soft); }
+  .add-recommendation:disabled { opacity: .45; cursor: default; }
+  .recommend-card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: start; }
+  .flow { display: flex; gap: 4px; margin: 6px 0 8px; padding: 0; list-style: none; }
+  .flow li { flex: 1 1 auto; min-width: 0; }
+  .flow button { width: 100%; min-height: 31px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--muted); font: inherit; font-size: 11px; font-weight: 750; white-space: nowrap; }
+  .flow button:not(:disabled) { color: var(--brand); cursor: pointer; }
+  .flow button[aria-current="step"] { background: #bc4222; border-color: #bc4222; color: white; }
   h1 { font-size: 19px; line-height: 1.25; letter-spacing: -.045em; margin: 0; }
   h1 a { display: inline-grid; place-items: center; min-width: 29px; min-height: 36px; margin-left: -5px; border-radius: 8px; font-size: 26px; vertical-align: middle; }
   h1 a:hover, .cart-link:hover { background: var(--bg); }
@@ -79,8 +88,6 @@
   .card .met { font-size: 13px; font-weight: 700; color: var(--ink); }
   .card .note { font-size: 12px; color: var(--muted); }
   .card .reason { font-size: 13px; line-height: 1.5; margin: 0; color: var(--ink); }
-  .order { display: block; width: 100%; margin-top: 8px; border: 0; border-radius: 8px; padding: 10px; background: var(--dark); color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-align: center; text-decoration: none; cursor: pointer; }
-  .order:disabled { opacity: .6; cursor: default; }
   .where { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .result-title, .zero-title { font-size: 17px; font-weight: 800; margin: 4px 0 0; }
   .zero-hint { font-size: 14px; color: var(--muted); margin: -4px 0 0; }
@@ -153,9 +160,10 @@
       <div class="top-actions">
         <span class="where" id="dong" aria-live="polite"></span>
         <select id="category" class="category-select" aria-label="추천 카테고리" hidden></select>
-        <a id="basket-link" class="cart-link" href="index.html?view=cart&amp;from=recommend">장바구니</a>
+        <a id="basket-link" class="cart-link" href="index.html?view=cart&amp;from=recommend" aria-label="장바구니"><img src="assets/cart.webp" alt=""><span id="basket-count" aria-hidden="true"></span></a>
       </div>
     </div>
+    <nav aria-label="메뉴 추천 단계"><ol class="flow" id="flow"></ol></nav>
     <div class="remain" id="remain"></div>
     <div class="chips" id="chips"></div>
   </header>
@@ -173,6 +181,7 @@
 <script type="module">
 import { browserKey, demo, esc, won } from './db.js';
 import { addCartMenus, readCart, setCartAccount } from './cart.js';
+import { matchesOrderableStore, recommendationCartSelection } from './recommend-catalog.js';
 import { customerRequest, reloadOnSessionChange } from './customer-session.js';
 import { heatLevels } from './menu-interview.js';
 import { suggest, fetchWeather, GU } from './suggest.js';
@@ -236,12 +245,30 @@ function remember(turn) {
 
 function updateBasketLink() {
   const count = readCart().reduce((sum, menu) => sum + menu.quantity, 0);
-  $('basket-link').textContent = count ? `장바구니 ${count}` : '장바구니';
+  $('basket-link').setAttribute('aria-label', count ? `장바구니 ${count}개` : '장바구니');
+  $('basket-count').textContent = count || '';
+}
+
+const flowSteps = [['people', '인원'], ['menu', '메뉴'], ['taste', '맛'], ['extra', '추가질문'], ['budget', '가격']];
+function renderFlow() {
+  const current = state?.flowStage ?? 'people';
+  const currentIndex = flowSteps.findIndex(([step]) => step === current);
+  $('flow').replaceChildren(...flowSteps.map(([step, label], i) => {
+    const item = document.createElement('li');
+    const button = item.appendChild(document.createElement('button'));
+    button.type = 'button';
+    button.textContent = step === 'extra' && !state?.flowExtraKind ? '(추가질문)' : label;
+    button.disabled = i >= currentIndex || (step === 'extra' && !state?.flowExtraKind);
+    if (step === current) button.setAttribute('aria-current', 'step');
+    button.onclick = () => send({ type: 'stage', stage: step }, `${label} 단계 다시 선택`);
+    return item;
+  }));
 }
 
 // 오른쪽 상태: 결과 화면이면 "추천 N곳", 그 밖(0곳 화면 등)에는 선택한 동네
 let shownCount = null;
 function updateHeader() {
+  renderFlow();
   $('dong').textContent = shownCount ? `추천 ${shownCount}곳` : [state?.dong, state?.neighborhood].filter(Boolean).join(' ');
   if (regionSelect) regionSelect.value = state?.neighborhood || '';
   $('category').hidden = !state?.dong || $('category').options.length < 2;
@@ -258,13 +285,13 @@ const SKELETON_AFTER_MS = 400;   // 빠른 응답에서 깜빡이지 않게 조�
 const SLOW_AFTER_MS = 8000;
 // 결과 카드가 나올 가능성이 있는 요청에만 카드 스켈레톤 (지역 고르기는 제외)
 // 카테고리를 바꾸는 요청은 세부 메뉴 버튼이 먼저 나오므로 제외
-const expectsCards = action => action?.type !== 'dong' && !(action?.type === 'apply' && action.cond && 'menu' in action.cond);
+const expectsCards = action => !['dong', 'stage'].includes(action?.type) && !(action?.type === 'apply' && action.cond && 'menu' in action.cond);
 let lockedControls = [];
 function lockForm(on) {
   $('input').readOnly = on;
   $('form').querySelectorAll('button').forEach(b => { b.disabled = on; }); // 🎤·보내기 모두
   if (on) { // 선택지·칩·추천 문장 버튼도 대기 중엔 막는다
-    lockedControls = [...document.querySelectorAll('#log button, #log select, #chips button, #suggest button, #category')].filter(el => !el.disabled);
+    lockedControls = [...document.querySelectorAll('#log button, #log select, #chips button, #suggest button, #flow button, #category')].filter(el => !el.disabled);
     lockedControls.forEach(el => { el.disabled = true; });
   } else {
     lockedControls.filter(el => el.isConnected && !el.dataset.spent).forEach(el => { el.disabled = false; });
@@ -354,25 +381,50 @@ const sentence = text => !text ? '' : /[.!?。]$/.test(text) ? text : text + '.'
 function card(c) {
   const params = new URLSearchParams({ store: c.storeId, from: 'recommend' });
   if (c.menuId) params.set('menu', c.menuId);
+  if (c.catalogDong) {
+    params.set('catalogDong', c.catalogDong);
+    params.set('catalogName', c.name);
+  }
   const menu = (c.items ?? [{ name: c.menu, qty: c.qty }]).map(line =>
     esc(line.name) + (c.items || line.qty > 1 ? ' × ' + esc(line.qty) : '')).join(' + ');
   // 설계엔 없지만 숨기면 오해가 생기는 안내만 한 줄로 (예산 초과, 일부 조건만 맞음)
   const heat = heatLevels.find(level => level.number === c.heat);
   const note = [heat && `맵기 ${heat.number}/5 · ${heat.example} 정도`, c.budgetNote, c.partial && '일부 조건만 맞아요'].filter(Boolean).join(' · ');
   const store = `index.html?${esc(params.toString())}`;
+  const storeName = `<a class="name" href="${store}" title="가게·메뉴 보기">${esc(c.name)}</a>`;
   return `<article class="card">
-    <div class="name-row"><a class="name" href="${store}" title="가게·메뉴 보기">${esc(c.name)}</a>${c.isNew || c.rating == null ? '<span class="badge-new">신규</span>' : `<span class="star">★ ${esc(c.rating)}</span>`}${c.isGoodPrice ? '<span class="badge-good">착한가게</span>' : ''}${c.distanceKm != null ? `<span class="dist">${esc(distanceLabel(c.distanceKm))}</span>` : ''}</div>
+    <div class="recommend-card-head">
+      <div class="name-row">${storeName}${c.isNew || c.rating == null ? '<span class="badge-new">신규</span>' : `<span class="star">★ ${esc(c.rating)}</span>`}${c.isGoodPrice ? '<span class="badge-good">착한가게</span>' : ''}${c.distanceKm != null ? `<span class="dist">${esc(distanceLabel(c.distanceKm))}</span>` : ''}</div>
+      ${c.menuId ? '<button type="button" class="add-recommendation" title="장바구니에 담기"><img src="assets/cart.webp" alt=""></button>' : ''}
+    </div>
     <div class="menu">${menu}</div>
     <div class="price"><span class="label">배달팁 포함 총액</span><b class="total">${won(c.total)}</b></div>
     ${note ? `<div class="note">${esc(note)}</div>` : ''}
     ${c.reason ? `<p class="reason">${esc(sentence(c.reason))}</p>` : ''}
     ${menuIntro(c)}
-    ${c.menuId ? '<button type="button" class="order add-recommendation">주문하기</button>' : `<a class="order" href="${store}">주문하기</a>`}
     <p class="cart-status" role="status" hidden></p>
   </article>`;
 }
 
 let addingMenu = false;
+async function cartSelection(card) {
+  const local = card.catalogDong ? await recommendationCartSelection(card) : null;
+  if (local?.lines.some(line => !line.item)) throw new Error('추천에 나온 메뉴가 변경됐어요. 다시 추천받아 주세요.');
+  const { stores } = await demo('catalog', { stores_only: true }).catch(error => {
+    if (!local) throw error;
+    return { stores: [] };
+  });
+  const store = stores.find(row => row.id === card.storeId && (!local || matchesOrderableStore(row, local.source.name, local.source.dong)));
+  if (!store && local) return local;
+  const menus = await demo('store_menus', { target: card.storeId });
+  const lines = (card.items ?? [{ menuId: card.menuId, qty: card.qty || 1 }]).map((line, i) => ({
+    item: menus.find(row => row.id === line.menuId && row.store_id === card.storeId &&
+      (!local || row.name === local.lines[i].item.name)),
+    quantity: line.qty,
+  }));
+  return local && lines.some(line => !line.item) ? local : { store, lines };
+}
+
 function renderCards(cards) {
   // 모든 카드에 똑같은 ✓는 위에 한 번만, 카드엔 그 가게만 다른 항목
   const wrap = add(cards.map(card).join(''), 'cards');
@@ -381,7 +433,7 @@ function renderCards(cards) {
     if (!button) return;
     const item = cards[index];
     const status = element.querySelector('.cart-status');
-    button.setAttribute('aria-label', `${item.name} ${item.items ? '메뉴 조합' : item.menu} 주문하기 (장바구니에 담기)`);
+    button.setAttribute('aria-label', `${item.name} ${item.items ? '메뉴 조합' : item.menu} 장바구니에 담기`);
     button.onclick = async () => {
       if (addingMenu) return;
       addingMenu = true;
@@ -389,18 +441,12 @@ function renderCards(cards) {
       status.hidden = false;
       status.textContent = '메뉴를 확인하고 있어요…';
       try {
-        const [{ stores }, menus] = await Promise.all([
-          demo('catalog', { stores_only: true }), demo('store_menus', { target: item.storeId }),
-        ]);
-        const store = stores.find(row => row.id === item.storeId);
-        const lines = (item.items ?? [{ menuId: item.menuId, qty: item.qty || 1 }]).map(line => ({
-          item: menus.find(row => row.id === line.menuId && row.store_id === item.storeId),
-          quantity: line.qty,
-        }));
+        const { store, lines } = await cartSelection(item);
         addCartMenus(lines, store);
         const quantity = lines.reduce((sum, line) => sum + line.quantity, 0);
         const currentPrice = lines.reduce((sum, line) => sum + line.item.price * line.quantity, store.delivery_fee);
         status.textContent = `${quantity}개 담았어요. 장바구니에 총 ${readCart().reduce((sum, line) => sum + line.quantity, 0)}개 있어요.` +
+          (lines.some(line => line.item.catalogOnly) ? ' 추천 목록 전용 메뉴예요.' : '') +
           (currentPrice !== item.total ? ` 현재 구성의 배달비 포함 예상 금액은 ${won(currentPrice)}이에요.` : '');
         updateBasketLink();
       } catch (error) {
@@ -500,7 +546,7 @@ async function send(action, echo) {
   try {
     const res = await fetch('/api/recommend', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ state, action, browserKey: browserKey() }),
+      body: JSON.stringify({ state, action, flow: 'guided', browserKey: browserKey() }),
     });
     const data = await res.json();
     clearWaiting();
@@ -596,7 +642,7 @@ async function chooseRegion() {
   // 지역·카테고리 목록을 불러오는 동안 자리 표시
   row.innerHTML = '<div class="loading-row" role="status" aria-live="polite" aria-label="추천 준비 중"><div class="skel bar"></div><div class="skel short"></div></div>';
   const step2 = start.appendChild(document.createElement('b'));
-  step2.textContent = '② 먹고 싶은 음식 말하기';
+  step2.textContent = '② 인원과 먹고 싶은 음식 말하기';
   const examples = start.appendChild(document.createElement('div'));
   examples.className = 'examples';
   for (const text of EXAMPLES) {
