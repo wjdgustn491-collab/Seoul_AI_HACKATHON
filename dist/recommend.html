@@ -684,7 +684,7 @@ async function chooseRegion() {
       if (busy) return;
       const h = home();
       select.value = h.neighborhood; select.hidden = true;
-      await send(homeAction(), `현재 위치 (${h.dong} ${h.neighborhood})`);
+      await send({ ...homeAction(), currentLocation: true }, `현재 위치 (${h.dong} ${h.neighborhood})`);
     };
     // 배달받을 동: 구별로 묶은 동 목록 (동 이름은 법정동, 같은 이름이 있으면 "신사동(은평구)")
     select.add(new Option('동 선택', ''));

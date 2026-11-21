@@ -33,6 +33,32 @@ const catTurn = async (engine, state, menu, ai = noGemini) =>
   skipSub(engine, await engine.handle(state, { type: 'apply', cond: { menu } }, ai), ai);
 const cards = turn => turn.reply.cards?.map(c => c.storeId) ?? [];
 
+test('current location opens with a joint food and headcount question, then offers headcount choices only when needed', async () => {
+  const engine = createEngine(snapshot, { guided: true });
+  const start = await engine.handle(null, { type: 'dong', dong: '서초구', staged: true, currentLocation: true }, noGemini);
+  assert.equal(start.reply.text, '먹고 싶은 음식과 인원 수를 말해주세요');
+  assert.equal(start.reply.buttons, undefined);
+
+  const send = (text, turn = start) => engine.handle(turn.state, { type: 'text', text }, noGemini);
+  const known = await send('둘이서 치킨 먹고 싶어');
+  assert.equal(known.state.cond.people, 2);
+  assert.equal(known.state.flowStage, 'taste');
+
+  const missing = await send('치킨 먹고 싶어');
+  assert.deepEqual(missing.reply.buttons.map(button => button.label), ['1인', '2인', '3인', '4인', '그 외']);
+  const fixed = await engine.handle(missing.state, missing.reply.buttons[1].action, noGemini);
+  assert.equal(fixed.state.cond.people, 2);
+  assert.equal(fixed.state.cond.menu, '치킨');
+  assert.equal(fixed.state.flowStage, 'taste');
+
+  const other = await engine.handle(missing.state, missing.reply.buttons[4].action, noGemini);
+  assert.match(other.reply.text, /직접 입력/);
+  const entered = await send('5명', other);
+  assert.equal(entered.state.cond.people, 5);
+  assert.equal(entered.state.cond.menu, '치킨');
+  assert.equal(entered.state.flowStage, 'taste');
+});
+
 test('staged recommendations ask about ambiguous groups, infer a date and allow going back', async () => {
   const engine = createEngine(snapshot, { guided: true });
   const step = (turn, action) => engine.handle(turn?.state, { ...action, staged: true }, noGemini);
