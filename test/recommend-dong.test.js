@@ -35,25 +35,26 @@ test('C·C2 1.2만 원: 같은 동 11·12 / 58·59', { skip }, async () => {
   }
 });
 
-test('C 1만 원: 같은 동 0곳 → 양보안 두 가지, 주변 동을 고르면 3km 확장으로 14번(같은 동네)', { skip }, async () => {
-  const { e, turn } = await ask('서초1동', '마라탕 1만원 이하');
-  assert.equal(turn.reply.zero, true);
-  assert.deepEqual(turn.reply.buttons.map(b => b.label), ['1만2천 원으로 올리면 우리 동 2곳', '주변 동까지 보면 1만 원에 1곳', '처음부터']);
-  const raise = await e.handle(turn.state, turn.reply.buttons[0].action, noAI);
-  assert.deepEqual(ids(raise).sort((a, b) => a - b), [11, 12]);
-  assert.equal(raise.reply.step, '같은 동');
-  const wide = await e.handle(turn.state, turn.reply.buttons[1].action, noAI);
-  assert.equal(wide.reply.step, '3km 확장');
-  assert.deepEqual(ids(wide), [14]);
-  assert.equal(wide.reply.cards[0].distanceKm, 0); // 서초2동: 중심점이 같아 0km → 화면에 "같은 동네"
+test('C 1만 원: 같은 동 0곳 → 3km 안의 동까지 자동으로 넓혀 14번(같은 동네), 넓혔다고 알린다', { skip }, async () => {
+  const { turn } = await ask('서초1동', '마라탕 1만원 이하');
+  assert.equal(turn.reply.step, '3km 확장');
+  assert.deepEqual(ids(turn), [14]);
+  assert.equal(turn.reply.cards[0].distanceKm, 0); // 서초2동: 중심점이 같아 0km → 화면에 "같은 동네"
+  assert.match(turn.reply.text, /서초1동에는 조건에 맞는 곳이 없어서 3km 안의 주변 동까지 넓혀/);
 });
 
-test('C2 1만 원: 같은 동 0곳 → 주변 동까지 보면 61번', { skip }, async () => {
-  const { e, turn } = await ask('성수1가2동', '마라탕 1만원 이하');
-  assert.equal(turn.reply.zero, true);
-  const wide = await e.handle(turn.state, turn.reply.buttons.find(b => b.action?.expand).action, noAI);
-  assert.deepEqual(ids(wide), [61]);
-  assert.equal(wide.reply.cards[0].distanceKm, 0.87);
+test('C2 1만 원: 같은 동 0곳 → 3km 확장으로 61번', { skip }, async () => {
+  const { turn } = await ask('성수1가2동', '마라탕 1만원 이하');
+  assert.equal(turn.reply.step, '3km 확장');
+  assert.deepEqual(ids(turn), [61]);
+  assert.equal(turn.reply.cards[0].distanceKm, 0.87);
+});
+
+test('3km까지 넓혀도 예산 안이 0곳이면 양보안: 예산에 가장 가까운 메뉴와 얼마가 넘는지', { skip }, async () => {
+  const { turn } = await ask('서초1동', '마라탕 3천원 이하');
+  assert.equal(turn.reply.kind, 'concession');
+  assert.equal(turn.reply.step, '3km 확장');
+  assert.ok(turn.reply.cards.length > 0 && turn.reply.cards.every(c => /예산보다 [\d,]+원 높아요/.test(c.budgetNote)));
 });
 
 test('"다른 데 보기"는 3km 안의 동까지 넓힌다, 노출 횟수는 엔진끼리 같이 쓴다', { skip }, async () => {

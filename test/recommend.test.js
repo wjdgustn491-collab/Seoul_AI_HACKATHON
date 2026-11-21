@@ -68,7 +68,7 @@ test('requires cheese quantity evidence, diversifies brands and answers franchis
     menus: pizza.map(([store, , , desc, price]) => ({ store, id: store + '-menu', name: '치즈피자', desc, price })),
   });
   const first = await textTurn(engine, null, '서초구에서 치즈가 많은 고소한 피자를 먹고 싶어');
-  assert.deepEqual(first.state.cond.taste, ['치즈 듬뿍']);
+  assert.deepEqual(first.state.cond.taste, ['고소', '치즈 듬뿍']); // 고소는 표준 맛(TASTE_CANON). 치즈피자 이름이 근거
   assert.equal(first.state.cond.dish, null);
   assert.equal(cards(first).filter(id => id.startsWith('chain')).length, 1);
   assert.ok(cards(first).includes('small-shop'));
@@ -81,11 +81,11 @@ test('requires cheese quantity evidence, diversifies brands and answers franchis
   assert.deepEqual(answer.state, first.state);
   const independent = await engine.handle(answer.state, answer.reply.buttons[0].action, noGemini);
   assert.deepEqual(cards(independent), ['small-shop']);
-  assert.deepEqual(independent.state.cond.taste, ['치즈 듬뿍']);
+  assert.deepEqual(independent.state.cond.taste, ['고소', '치즈 듬뿍']);
   assert.equal(independent.state.cond.franchise, 'exclude');
   const explicit = await textTurn(engine, first, '프렌차이즈 아닌 피자집으로 바꿔줘');
   assert.deepEqual(cards(explicit), ['small-shop']);
-  assert.deepEqual(explicit.state.cond.taste, ['치즈 듬뿍']);
+  assert.deepEqual(explicit.state.cond.taste, ['고소', '치즈 듬뿍']);
   const tooCheap = await textTurn(engine, independent, '1만원으로 바꿔줘');
   assert.deepEqual(cards(tooCheap), ['small-shop']);
   assert.match(tooCheap.reply.cards[0].budgetNote, /18,000원/);
@@ -240,7 +240,7 @@ test('expands the region and never includes stores outside Seoul in Seoul-wide r
   assert.equal(chicken.state.dong, '서울 전체');
   assert.deepEqual(cards(chicken), ['seocho-chicken-crunch']);
   const unknown = await textTurn(engine, chicken, '해운대구에서 추천해줘');
-  assert.match(unknown.reply.text, /해운대구.*찾지 못했어요/);
+  assert.match(unknown.reply.text, /해운대.*(?:찾지 못했어요|추천해 드릴 수 없어요)/); // 서울 밖은 추천하지 않는다(지역 밖 안내)
   assert.equal(unknown.state.dong, '서울 전체');
   assert.deepEqual(cards(unknown), []);
 });
