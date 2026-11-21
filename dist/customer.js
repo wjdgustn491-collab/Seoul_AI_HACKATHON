@@ -311,8 +311,7 @@ function account() {
       '<h2>밥파일럿에 로그인하세요</h2><p class="muted">내 주문, 찜한 가게와 리뷰를 계정에서 확인할 수 있어요.</p>' +
       button("로그인", "signin", "", "primary") + button("회원가입", "signup")) +
     '<div class="account-links">' + button("주소 관리 ›", "addresses", "", "plain left") +
-    button("주문 관리 ›", "orders", "", "plain left") + button("리뷰 관리 ›", "my-reviews", "", "plain left") +
-    '<a class="plain left" href="merchant.html">사장님 화면 ↗</a></div>' +
+    button("주문 관리 ›", "orders", "", "plain left") + button("리뷰 관리 ›", "my-reviews", "", "plain left") + '</div>' +
     (user ? button("로그아웃", "signout") : "") + '</section>';
 }
 
