@@ -58,6 +58,7 @@ test('requires cheese quantity evidence, diversifies brands and answers franchis
     ['chain-three', '오븐피자 망우점', true, '더블 치즈', 20000],
     ['small-shop', '양철지붕피자', false, '치즈를 많이 올렸어요', 27000],
     ['cheese-only', '작은피자', false, '치즈 쭉쭉 고소', 9000],
+    ['denied-cheese', '담백한피자', false, '치즈 듬뿍은 아니에요', 9000],
     ['plain', '모락피자', false, '1인용 미니 피자', 7000],
   ];
   const engine = createEngine({
@@ -71,6 +72,7 @@ test('requires cheese quantity evidence, diversifies brands and answers franchis
   assert.equal(first.state.cond.dish, null);
   assert.equal(cards(first).filter(id => id.startsWith('chain')).length, 1);
   assert.ok(cards(first).includes('small-shop'));
+  assert.ok(!cards(first).includes('denied-cheese'));
   assert.ok(first.reply.cards.every(card => card.checks.includes('치즈 듬뿍')));
   const noAi = new Proxy({}, { get: () => assert.fail('A franchise question should only read the catalog') });
   const answer = await textTurn(engine, first, '너가 추천해준곳은 프렌차이즈 아닌가?', noAi);
@@ -93,6 +95,118 @@ test('requires cheese quantity evidence, diversifies brands and answers franchis
   }), null, '서초구에서 치즈 듬뿍 피자 추천해줘');
   assert.match(unavailable.reply.text, /치즈 양이 많다는 근거/);
   assert.deepEqual(cards(unavailable), []);
+});
+
+function chickenCatalog(rows) {
+  const stores = [...new Set(rows.map(([store]) => store))].map(id => ({
+    id, name: id, region: '서초구', dong: '서초4동', category: '치킨', tip: 1000, rating: 4.5,
+  }));
+  const menus = rows.map(([store, id, name, price, desc = '']) => ({ store, id, name, price, desc }));
+  return { stores, menus };
+}
+
+test('keeps non-spicy requests explicit in regular results and budget alternatives', async () => {
+  const engine = createEngine(chickenCatalog([
+    ['house-mild', 'mild', '간장치킨', 18000, '간장 소스는 맵지 않아 순한 맛이에요.'],
+    ['house-hot', 'hot', '매운 양념치킨', 8000],
+    ['house-unknown', 'unknown', '후라이드치킨', 7000],
+    ['house-both', 'both', '반반 치킨', 6000, '안 매운 간장과 매운 양념 반반'],
+  ]));
+  const search = text => engine.handle(null, { type: 'text', text });
+  for (const request of ['안 매운 치킨', '맵지 않은 치킨', '순한 맛 치킨', '치킨. 매운 건 빼줘']) {
+    const result = await search(`서초구에서 ${request} 추천해줘`);
+    assert.equal(result.state.cond.dish, null);
+    assert.deepEqual(result.state.cond.taste, ['안 매운']);
+    assert.deepEqual(cards(result), ['house-mild']);
+    assert.match(result.reply.cards[0].reason, /메뉴 설명.*안 매운/);
+  }
+  const hot = await search('서초구에서 매운 치킨 추천해줘');
+  const switched = await engine.handle(hot.state, { type: 'text', text: '안 매운 걸로' });
+  assert.deepEqual(switched.state.cond.taste, ['안 매운']);
+  const overBudget = await engine.handle(switched.state, { type: 'text', text: '예산만 1만 원으로' });
+  assert.deepEqual(cards(overBudget), ['house-mild']);
+  assert.equal(overBudget.reply.cards[0].budgetNote, '예산보다 9,000원 높아요');
+  const alternative = await engine.handle(switched.state, { type: 'text', text: '안 매운 후라이드치킨으로 바꿔줘' });
+  assert.deepEqual(cards(alternative), ['house-mild']);
+  assert.equal(alternative.reply.cards[0].partial, true);
+  const onlySpicy = createEngine(chickenCatalog([['house-hot', 'hot', '매운치킨', 8000]]));
+  const noEvidence = await onlySpicy.handle(null, { type: 'text', text: '서초구 안 매운 치킨 2만 원 이하 추천해줘' });
+  assert.deepEqual(cards(noEvidence), []);
+  assert.match(noEvidence.reply.text, /맵지 않다고 표기된/);
+  assert.ok(noEvidence.reply.chips.some(chip => chip.label === '안 매운'));
+});
+
+test('does not add a spicy or undocumented main to a non-spicy group plan', async () => {
+  const engine = createEngine(chickenCatalog([
+    ['house', 'mild', '순한 간장치킨 (2인분)', 14000],
+    ['house', 'hot', '매운치킨 (1인분)', 4000],
+    ['house', 'unknown', '후라이드치킨 (1인분)', 6000],
+  ]));
+  const result = await engine.handle(null, { type: 'text', text: '서초구에서 3명 안 매운 치킨 3만3천 원으로 추천해줘' });
+  const [card] = result.reply.cards;
+  assert.equal(card.menuId, 'mild');
+  assert.equal(card.items, undefined);
+  assert.equal(card.qty, 2);
+  assert.equal(card.total, 29000);
+  assert.equal(card.portionNote, '4인분 표기 기준');
+});
+
+test('asks a local chicken question based on eligible plans and keeps the chosen cut after a budget edit', async () => {
+  const engine = createEngine(snapshot);
+  const first = await engine.handle(null, { type: 'text', text: '서초구에서 두 명이서 인당 1만2천 원 치킨 추천해줘' });
+  assert.equal(first.state.cond.budget_unit, 'per_person');
+  assert.match(first.reply.followUp, /순살과 뼈/);
+  assert.deepEqual(first.state.pending, [
+    { label: '순살', store_ids: ['seocho-chicken', 'seocho-chicken-crunch'] },
+    { label: '뼈', store_ids: ['seocho-chicken-bone'] },
+  ]);
+  const skip = first.reply.buttons.find(button => button.label === '상관없어요');
+  const skipped = await engine.handle(first.state, skip.action);
+  assert.equal(skipped.state.pending, null);
+  assert.equal(skipped.state.dong, '서초구');
+  const option = first.reply.buttons.find(button => button.label === '순살 (2곳)');
+  const selected = await engine.handle(first.state, option.action);
+  assert.ok(selected.reply.cards.length > 0);
+  assert.ok(selected.reply.cards.every(card => /순살/.test(card.menu)));
+  assert.equal(selected.state.pending, null);
+  const updated = await engine.handle(selected.state, { type: 'text', text: '예산만 3만 원으로 바꿔줘' });
+  assert.equal(updated.state.cond.budget, 30000);
+  assert.equal(updated.state.cond.budget_unit, 'per_person');
+  assert.equal(updated.state.cond.menu, '치킨');
+  assert.equal(updated.state.cond.people, 2);
+  assert.deepEqual(updated.state.cond.taste, ['순살']);
+  assert.ok(updated.reply.cards.every(card => /순살/.test(card.menu)));
+});
+
+test('skips local cut questions that cannot narrow the candidates within budget', async () => {
+  const engine = createEngine(chickenCatalog([
+    ['both-cuts', 'boneless', '마늘간장 순살', 16000],
+    ['both-cuts', 'bone', '뼈 있는 양념치킨', 17000],
+    ['too-expensive', 'expensive-bone', '뼈 있는 치킨', 31000],
+    ['unspecified', 'whole', '후라이드치킨', 18000],
+  ]));
+  const result = await engine.handle(null, { type: 'text', text: '서초구 치킨 2만 원 이하 추천해줘' });
+  assert.ok(result.reply.cards.some(card => card.menuId === 'boneless'));
+  assert.equal(result.state.pending, null);
+  assert.doesNotMatch(result.reply.followUp, /순살과 뼈/);
+  const bone = await engine.handle(result.state, { type: 'text', text: '뼈가 있는 치킨 추천해줘' });
+  assert.equal(bone.state.cond.dish, null);
+  assert.deepEqual(bone.reply.cards.map(card => card.menuId), ['bone']);
+});
+
+test('keeps a taste while asking for a category and displays evidence for catalog synonyms', async () => {
+  const engine = createEngine(chickenCatalog([
+    ['crispy-mild', 'crispy', '후라이드치킨', 18000, '겉바속촉이고 맵지 않아요.'],
+    ['other', 'spicy', '매운 양념치킨', 17000],
+  ]));
+  const first = await engine.handle(null, { type: 'text', text: '서초구에서 크리스피하고 안 매운 걸로 추천해줘' });
+  const chooseChicken = first.reply.buttons.find(button => button.label === '치킨');
+  assert.ok(chooseChicken);
+  const result = await engine.handle(first.state, chooseChicken.action);
+  assert.deepEqual(result.state.cond.taste, ['바삭', '안 매운']);
+  assert.deepEqual(cards(result), ['crispy-mild']);
+  assert.ok(result.reply.cards[0].checks.includes('바삭'));
+  assert.match(result.reply.cards[0].reason, /메뉴 설명.*안 매운/);
 });
 
 test('changes district and dong without clearing food, headcount or budget', async () => {
@@ -166,6 +280,66 @@ test('shows exact dishes, then explicitly labeled category alternatives for miss
   assert.deepEqual(cards(overBudget), ['gangnam-chinese']);
   assert.equal(overBudget.reply.cards[0].budgetNote, '예산보다 1,500원 높아요');
   assert.ok(!overBudget.reply.cards[0].checks.includes('예산'));
+});
+
+const tteokbokkiStores = [
+  { id: 'seller', name: '봄분식', category: '분식' },
+  { id: 'brand', name: '엽떡 서초점', category: '분식' },
+  { id: 'mala', name: '마라반점', category: '중식' },
+].map(store => ({ ...store, region: '서초구', dong: '서초4동', tip: 1000, rating: 4.5 }));
+const tteokbokkiMenus = [
+  { id: 'brand-original', store: 'brand', name: '엽떡', price: 13000, desc: '매운 떡볶이' },
+  { id: 'mala-tang', store: 'mala', name: '마라탕', price: 12000, desc: '얼얼한 마라 맛' },
+];
+
+test('matches the whole registered 마라로제엽떡 name instead of filtering by the store name inside it', async () => {
+  const registered = { id: 'demo-mara-rose', store: 'seller', name: '마라로제엽떡', price: 16000, desc: '마라 향과 로제 소스를 더한 떡볶이예요.' };
+  const engine = createEngine({ stores: tteokbokkiStores, menus: [...tteokbokkiMenus, registered] });
+  const region = await engine.handle(null, { type: 'dong', dong: '서초구' });
+  for (const text of ['마라로제엽떡', '마라 로제 엽떡', '2만 원 이하로 마라로제엽떡 추천해줘']) {
+    const result = await textTurn(engine, region, text);
+    assert.equal(result.state.cond.menu, '분식');
+    assert.equal(result.state.cond.dish, registered.name);
+    assert.equal(result.state.cond.store, null);
+    assert.deepEqual(result.state.cond.taste, ['로제', '마라']);
+    assert.deepEqual(cards(result), ['seller']);
+    const [card] = result.reply.cards;
+    assert.equal(card.menuId, registered.id);
+    assert.equal(card.partial, false);
+    assert.ok(card.checks.includes('마라') && card.checks.includes('로제'));
+  }
+  const explicitStore = await textTurn(engine, region, '엽떡 서초점에서 마라로제엽떡 추천해줘');
+  assert.equal(explicitStore.state.cond.store, '엽떡 서초점');
+  const model = { parse: async () => ({ menu: '중식', dish: '마라', taste: ['마라'] }) };
+  const withModel = await textTurn(engine, region, '마라로제엽떡 추천해줘', model);
+  assert.equal(withModel.state.cond.menu, '분식');
+  assert.equal(withModel.state.cond.dish, registered.name);
+  assert.ok(withModel.reply.cards[0].checks.includes('로제'));
+});
+
+test('keeps the flavored 떡볶이 request in 분식 when the exact menu is absent', async () => {
+  const similar = { id: 'similar', store: 'seller', name: '마라 로제 떡볶이', price: 15000, desc: '마라 향과 로제 소스' };
+  const engine = createEngine({ stores: tteokbokkiStores, menus: [...tteokbokkiMenus, similar] });
+  const region = await engine.handle(null, { type: 'dong', dong: '서초구' });
+  const result = await textTurn(engine, region, '마라로제엽떡');
+  assert.equal(result.state.cond.menu, '분식');
+  assert.equal(result.state.cond.dish, '마라로제엽떡');
+  assert.equal(result.state.cond.store, null);
+  assert.deepEqual(result.state.cond.taste, ['로제', '마라']);
+  assert.match(result.reply.text, /마라로제엽떡.*찾지 못했어요.*분식.*대안/);
+  assert.deepEqual(cards(result), ['seller']);
+  assert.equal(result.reply.cards[0].menuId, similar.id);
+  assert.equal(result.reply.cards[0].partial, true);
+  const singleFlavor = createEngine({
+    stores: tteokbokkiStores,
+    menus: [...tteokbokkiMenus, { ...similar, name: '로제떡볶이', desc: '부드러운 로제 소스' }],
+  });
+  const partial = await textTurn(singleFlavor, region, '마라로제엽떡');
+  assert.match(partial.reply.text, /‘마라’ 조건은 .*확인하지 못했어요/);
+  assert.ok(partial.reply.cards.every(card => card.partial && !card.checks.includes('마라')));
+  const malaTang = await textTurn(engine, region, '마라탕');
+  assert.equal(malaTang.state.cond.menu, '중식');
+  assert.equal(malaTang.reply.cards[0].menuId, 'mala-tang');
 });
 
 test('searches a group budget without a category and offers the nearest totals', async () => {

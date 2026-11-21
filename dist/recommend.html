@@ -7,19 +7,27 @@
 <script src="phone-clock.js" defer></script>
 <style>
   :root {
-    --bg: #f4f5f7; --surface: #fff; --ink: #14213d; --muted: #6b7280; --line: #e5e7eb;
-    --brand: #0f766e; --brand-soft: #e6f4f2; --accent: #ea580c; --accent-soft: #fff1e8; --ai: #7c3aed; --dark: #1f2430; --card-line: #d9dce3;
+    color-scheme: light;
+    --bg: #f4f6f4; --surface: #fff; --ink: #191b1a; --muted: #656b67; --line: #e5e8e5;
+    --brand: #a63b21; --brand-soft: #fff4ed; --accent: #a63b21; --accent-soft: #fff1e8; --ai: #6d28d9;
+    --dark: #232825; --card-line: #dde1dd;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-  .app { max-width: 440px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
-  header { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); padding: 12px 16px 10px; }
-  .phone-status { display: flex; justify-content: space-between; align-items: center; min-height: 27px; margin-bottom: 6px; padding-inline: 7px; font-size: 13px; font-weight: 850; font-variant-numeric: tabular-nums; }
+  body { margin: 0; display: grid; place-items: center; min-height: 100dvh; background: #e7ebe7; color: var(--ink); font: 14px/1.5 Inter, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  .app {
+    position: relative; display: flex; flex-direction: column; width: min(414px, 100%); height: min(880px, calc(100dvh - 38px)); min-height: 0;
+    overflow: hidden; border: 8px solid #232825; border-radius: 41px; background: var(--surface); box-shadow: 0 22px 55px #2035262d;
+  }
+  :focus-visible { outline: 2px solid #9e3a20; outline-offset: 2px; }
+  header { flex: none; background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 14px 10px; }
+  .phone-status { display: flex; justify-content: space-between; align-items: center; min-height: 49px; padding-inline: 9px; font-size: 13px; font-weight: 850; font-variant-numeric: tabular-nums; }
   .phone-status i { position: absolute; left: 50%; transform: translateX(-50%); width: 89px; height: 24px; border-radius: 50px; background: #141615; }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; min-height: 44px; }
   .top-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
-  .cart-link { color: var(--brand); font-size: 12px; font-weight: 600; white-space: nowrap; }
-  h1 { font-size: 17px; margin: 0; }
+  .cart-link { padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; color: var(--brand); font-size: 12px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+  h1 { font-size: 19px; line-height: 1.25; letter-spacing: -.045em; margin: 0; }
+  h1 a { display: inline-grid; place-items: center; min-width: 29px; min-height: 36px; margin-left: -5px; border-radius: 8px; font-size: 26px; vertical-align: middle; }
+  h1 a:hover, .cart-link:hover { background: var(--bg); }
   .dong { font-size: 13px; color: var(--brand); font-weight: 600; }
   .remain { font-size: 12px; color: var(--muted); }
   .remain b { color: var(--brand); }
@@ -30,7 +38,7 @@
   .chip.price, .chip.menu { cursor: pointer; }
   .chip.price::after, .chip.menu::after { content: '▾'; font-size: 11px; color: var(--muted); }
   .btn small { display: block; font-size: 12px; opacity: .8; }
-  .start { display: flex; flex-direction: column; gap: 8px; background: var(--bg); border-radius: 16px; padding: 12px; }
+  .start { display: flex; flex-direction: column; gap: 8px; background: #edf5ee; border: 1px solid var(--line); border-radius: 13px; padding: 14px; }
   .start b { font-size: 14px; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; }
   .examples .chip { cursor: pointer; font: inherit; font-size: 13px; }
@@ -48,12 +56,13 @@
   .regions select[hidden] { display: none; }
   .start select { border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--surface); color: var(--ink); font: inherit; }
   #mic { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand); font-size: 18px; }
-  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
-  .msg { max-width: 85%; padding: 10px 13px; border-radius: 16px; white-space: pre-wrap; }
+  main { flex: 1 1 auto; min-height: 0; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  main > * { flex-shrink: 0; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .bot { align-self: flex-start; background: var(--bg); border-top-left-radius: 4px; }
   .user { align-self: flex-end; background: var(--brand); color: #fff; border-top-right-radius: 4px; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; }
-  .btn { border: 1px solid var(--brand); background: var(--brand-soft); color: var(--brand); border-radius: 12px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .btn { border: 1px solid var(--brand); background: var(--brand-soft); color: var(--brand); border-radius: 11px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
   .btn.ghost { border-color: var(--line); background: var(--surface); color: var(--ink); }
   .btn:disabled { opacity: .45; cursor: default; }
   .banner { background: var(--accent-soft); color: #9a3412; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -100,14 +109,14 @@
   .jump { position: absolute; left: 50%; top: -46px; transform: translateX(-50%); border: 0; border-radius: 999px; padding: 8px 14px; background: var(--dark); color: var(--surface); font: inherit; font-size: 13px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
   .jump[hidden] { display: none; }
   .step-badge { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
-  .chip.step { border-color: var(--brand); color: var(--brand); }
+  .chip.step { border-color: var(--brand); color: #346242; }
   .card .dist { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
   .card .star { font-size: 12px; color: var(--muted); }
   .badge-good { font-size: 11px; font-weight: 700; color: var(--brand); border: 1px solid var(--brand); border-radius: 6px; padding: 1px 6px; }
   .chip.sub { cursor: pointer; }
   .chip.sub::after { content: '▾'; font-size: 11px; color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { .dots i, .skel { animation: none; } }
-  .checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--brand); }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: #346242; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { font-size: 12px; border-radius: 6px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .tag.new { background: #ede9fe; color: var(--ai); }
@@ -121,15 +130,12 @@
   .regions select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: var(--surface); color: var(--ink); font: inherit; }
   .category-select { max-width: 125px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
   .cart-status { margin: 0; color: var(--muted); font-size: 13px; }
-  .dock { position: sticky; bottom: 0; z-index: 2; /* jump 버튼 기준 */ background: var(--surface); border-top: 1px solid var(--line); }
-  form { display: flex; gap: 8px; padding: 10px 16px 16px; background: var(--surface); }
-  input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; background: var(--surface); color: var(--ink); }
-  form button { border: 0; border-radius: 12px; padding: 0 16px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #0f1115; --surface: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #2a2f3a; --brand: #2dd4bf; --brand-soft: #0f2e2b; --accent: #fb923c; --accent-soft: #3a2314; --dark: #e5e7eb; --card-line: #2a2f3a; }
-    :root:not([data-theme="light"]) .order, :root:not([data-theme="light"]) .next-btn.dark { color: #0f1115; }
-    :root:not([data-theme="light"]) .user { color: #04201d; }
-    :root:not([data-theme="light"]) .banner { color: var(--accent); }
+  .dock { flex: none; position: relative; z-index: 2; /* jump 버튼 기준 */ background: var(--surface); border-top: 1px solid var(--line); }
+  form { display: flex; gap: 8px; padding: 10px 14px max(12px, env(safe-area-inset-bottom)); background: var(--surface); }
+  input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; font: inherit; background: #f1f3f4; color: var(--ink); }
+  form button { border: 0; border-radius: 11px; padding: 0 12px; background: #bc4222; color: #fff; font: inherit; font-weight: 750; white-space: nowrap; cursor: pointer; }
+  @media (max-width: 450px) {
+    .app { width: 100%; height: 100dvh; border: 0; border-radius: 0; }
   }
 </style>
 </head>
@@ -160,15 +166,19 @@
   </div>
 </div>
 <script type="module">
-import { demo, esc, won } from './db.js';
-import { addCartMenus, readCart } from './cart.js';
+import { browserKey, demo, esc, won } from './db.js';
+import { addCartMenus, readCart, setCartAccount } from './cart.js';
+import { customerRequest, reloadOnSessionChange } from './customer-session.js';
 import { suggest, fetchWeather, GU } from './suggest.js';
 import { distanceLabel } from './searchRule.js';
 import { DEMO_HOME, homeOf } from './home.js';
 
 const $ = id => document.getElementById(id);
 const log = $('log');
-const SESSION_KEY = 'seoul-recommend-conversation';
+reloadOnSessionChange();
+const { account } = await customerRequest('session').catch(() => ({ account: null }));
+setCartAccount(account?.id);
+const SESSION_KEY = 'seoul-recommend-conversation' + (account ? ':' + account.id : '');
 let saved;
 // 새로고침이면 처음부터. 장바구니·가게 화면에 갔다가 돌아온 경우(뒤로 가기 등)는 대화를 이어간다.
 const reloaded = performance.getEntriesByType('navigation')[0]?.type === 'reload';
@@ -182,13 +192,13 @@ const optionButtons = new Set();
 // ---------- 자동 스크롤 ----------
 // 긴 답변(추천 카드)은 답변 시작 위치를 화면 위쪽에, 짧은 메시지·버튼은 맨 아래로.
 // 사용자가 직접 위로 올려 예전 대화를 보고 있으면 따라가지 않고 "새 메시지 ↓"를 띄운다.
-const page = document.scrollingElement;
+const page = log; // 스크롤은 폰 프레임 안의 <main>에서 일어난다
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const NEAR_BOTTOM_PX = 160;
 let follow = true, restoring = false, holdScroll = 0, userScrollAt = 0, target = null;
-const fromBottom = () => page.scrollHeight - page.scrollTop - innerHeight;
+const fromBottom = () => page.scrollHeight - page.scrollTop - page.clientHeight;
 for (const type of ['wheel', 'touchmove', 'keydown']) addEventListener(type, () => { userScrollAt = Date.now(); }, { passive: true });
-addEventListener('scroll', () => {
+page.addEventListener('scroll', () => {
   const near = fromBottom() < NEAR_BOTTOM_PX;
   if (near) { follow = true; $('jump').hidden = true; }
   else if (Date.now() - userScrollAt < 1000) follow = false; // 프로그램이 올린 건 무시, 사용자가 올린 것만
@@ -196,18 +206,19 @@ addEventListener('scroll', () => {
 function scrollToTarget(smooth) {
   if (!target?.el.isConnected) return;
   const top = target.mode === 'start'
-    ? target.el.getBoundingClientRect().top + page.scrollTop - document.querySelector('header').offsetHeight - 8
+    ? target.el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop - 8
     : page.scrollHeight;
   page.scrollTo({ top, behavior: smooth && !reduceMotion.matches && !restoring ? 'smooth' : 'auto' });
 }
 function reveal(el, mode = 'end') {
   if (!el || holdScroll) return;
   target = { el, mode, at: Date.now() };
+  resized.disconnect(); resized.observe(el);
   if (!follow && !restoring) { $('jump').hidden = false; return; }
   requestAnimationFrame(() => scrollToTarget(true));
 }
 // 이미지가 늦게 로드되는 등 높이가 바뀌면 방금 맞춘 위치를 한 번 더 맞춘다
-new ResizeObserver(() => { if (target && follow && Date.now() - target.at < 2500) scrollToTarget(false); }).observe(log);
+const resized = new ResizeObserver(() => { if (target && follow && Date.now() - target.at < 2500) scrollToTarget(false); });
 $('jump').onclick = () => { follow = true; $('jump').hidden = true; scrollToTarget(true); };
 const scroll = () => reveal(log.lastElementChild, 'end');
 
@@ -473,7 +484,10 @@ async function send(action, echo) {
   stage.textContent = STAGE_TEXT[0];
   const clearWaiting = () => { timers.forEach(clearTimeout); wait.remove(); skeleton?.remove(); };
   try {
-    const res = await fetch('/api/recommend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ state, action }) });
+    const res = await fetch('/api/recommend', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state, action, browserKey: browserKey() }),
+    });
     const data = await res.json();
     clearWaiting();
     if (DEBUG && data.timing) add(esc(Object.entries(data.timing).map(([k, v]) => `${k} ${v}ms`).join(' · ') + ` · ${data.provider}`), 'debug-timing');

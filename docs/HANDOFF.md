@@ -7,7 +7,7 @@
 추천 화면(밥파일럿)을 **동 단위 실데이터 + 대화형 흐름**으로 바꾸고, 복합 문장의 **맥락 조건**(먹은 것·피할 것·끼니·계절·배달팁)을 추천에 반영한다. 필터·점수·순위·총액 계산의 기본 규칙은 유지한다.
 
 ## 현재 상태
-- 브랜치 PR #1(P0~P1 피드백 반영)은 `main`에 병합됨. 그 뒤 작업은 **이 브랜치 로컬에만** 있고, `origin/main`은 팀원 커밋으로 **33개 앞서 있다**(엔진·테스트·회원가입·주소 선택·사장님 AI 인터뷰 등).
+- 브랜치 PR #1(P0~P1 피드백 반영)은 `main`에 병합됨. 그 뒤 작업은 **이 브랜치 로컬에만** 있다. 2026-11-21 `origin/main`(7e96503)을 합침(아래 1번).
 - 실행: `node scripts/build-data.mjs` (data/ → dist/data, 약 2초) → `node --env-file-if-exists=.env.local local/dev.mjs` → http://localhost:4173/recommend.html
   - `local/`은 `.git/info/exclude`로 제외된 로컬 전용 폴더(dev 서버, `DEV_DELAY_MS=3000`으로 응답 지연 가능).
 - AI 없이 동작: `LLM_PROVIDER=none` 또는 `RECOMMENDATION_MODE=rules`(로컬 dev 서버 기본값은 none).
@@ -23,10 +23,17 @@
 | `lib/prompts.js`, `lib/llm/*` | 프롬프트 분리, 응답 스키마 검사·1회 재요청, 맥락 필드 5개 추가 |
 | `dist/recommend.html`, `dist/home.js`, `dist/suggest.js`, `dist/seoul-gu.js` | 설계안 카드, 자동 스크롤·로딩 스켈레톤, [현재 위치]=등록 주소(없으면 광진구 화양동), 상황 추천 문장(날씨·시간) |
 
-**테스트 (모두 통과)**: `node --test test/recommend.test.js test/recommend-dong.test.js test/searchRule.test.js test/llm.test.js test/suggest.test.js` → 53 + 6 + 5 + 9 + 6 = **79개 통과**. `dist/data`가 없으면 동 데이터 테스트는 skip된다.
+**테스트 (모두 통과)**: `node --test test/*.test.js` → **99개 통과**(main 병합 후, 팀 테스트 포함). `dist/data`가 없으면 동 데이터 테스트(`recommend-dong`, `recommend-api`)는 skip된다.
+
+**평가(분석) 스크립트**: `node scripts/analysis/rating.mjs`, `node scripts/analysis/impressions.mjs`(세부 메뉴 질문에 "상관없어요"로 답하게 고침). 병합 전후 숫자 같음.
 
 ## 남은 것 (순서대로)
-1. **최신 `main`과 합치기** — 충돌 예상: `lib/engine.js`(팀원 +300줄: `details`, 메뉴 설명 연동), `test/recommend.test.js`, `dist/recommend.html`, `api/recommend.js`. 합친 뒤 `RECOMMENDATION_MODE`·`details`를 팀 코드 기준으로 정리하고, 계절 근거(`seasonOf`)에 `menu.details`도 넣는다.
+1. ~~최신 `main`과 합치기~~ — **완료**. 정리한 것:
+   - `lib/engine.js`: 팀의 `details`(인분·맛·특징)·엄격 조건(안 매운·순살/뼈)·순살/뼈 질문 + 이 브랜치의 업종별 대표 메뉴·맥락 조건·가게별 기준가를 합침. `seasonOf`에 `menu.details` 반영. 세부 메뉴 질문은 비대화형에서도 예산을 말하면 건너뜀(팀 테스트 기대). 동 단위 0곳일 때도 "맵지 않다고 표기된 … 못 찾았어요" 이유를 보여 줌.
+   - `api/recommend.js`: `RECOMMENDATION_MODE=rules`면 AI 없이(팀 코드). **사장님 메뉴 수정(browserKey)이 있는 브라우저만 팀의 Supabase 카탈로그 + 수정 내역으로 추천**, 나머지는 동 단위 데이터. 이유: 데모 카탈로그와 `dist/data`는 가게·메뉴 id 체계가 달라(같은 id·이름 메뉴 244/50,354) 수정 내역을 동 데이터에 덮을 수 없음. → **팀 결정 필요**: 사장님 가게를 `dist/data` id로 맞출지.
+   - `dist/recommend.html`: 팀의 폰 프레임 디자인·로그인 세션 채택(다크 모드 제거됨). 스크롤 컨테이너가 `<main>`으로 바뀌어 자동 스크롤을 거기에 맞춤 — **브라우저에서 눈으로 확인은 아직**.
+   - 테스트: `recommend-api`는 동 데이터 기준으로, `merchant-menu`의 "수정 없는 브라우저" 확인은 동 데이터 경로 기준으로 바꿈.
+   - 실데이터에서 "안 매운 치킨"은 화양동 0곳(메뉴에 '맵지 않음' 표기가 드묾) — 팀의 엄격 규칙대로 동작하는 것. 완화 여부는 6번 튜닝에서.
 2. **배포용 데이터** — `dist/data`(약 74MB)는 빌드 산출물이라 커밋하지 않았다. Vercel 빌드에 `node scripts/build-data.mjs`를 넣고 `vercel.json`에 함수 includeFiles(`dist/data/**`)를 추가. 저장소 루트의 원본(팀이 올린 확장자 없는 파일)과 `data/` 중 하나로 정리.
 3. **DB 후속(팀 합의 필요)** — `supabase/migrations`의 snapshot에 `review_count` 추가, 노출 횟수 +1 RPC. 근거: `C:\3th_project\서울_해커톤\analysis-rating-impressions.md`.
 4. **장바구니** — `dist/recommend.html`의 `renderCards` 주문 버튼은 Supabase 데모 카탈로그(4,672곳)로 조회해서, 새 데이터에만 있는 가게는 담기 실패 가능.

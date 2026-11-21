@@ -6,7 +6,7 @@ export const readLocal = (key, fallback) => {
 };
 export const saveLocal = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 
-function browserKey() {
+export function browserKey() {
   const storageKey = "seoul-delivery-demo-key";
   const existing = readLocal(storageKey, null);
   if (existing) return existing;

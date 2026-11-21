@@ -1,0 +1,36 @@
+# -*- coding: utf-8 -*-
+"""검색 규칙: 1단계 같은 동 → (결과 0곳 또는 '더 보기') 2단계 3km 안의 동까지.
+실행: python search_rule.py  (시나리오 검증)"""
+import csv, os, re
+from collections import defaultdict
+HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.dirname(HERE)
+rd = lambda p: list(csv.DictReader(open(p, encoding="utf-8-sig")))
+ZONE = defaultdict(dict)
+for r in rd(os.path.join(HERE, "delivery_zone_3km.csv")): ZONE[r["customer_dong"]][r["store_dong"]] = float(r["distance_km"])
+def search(S, M, dong, category=None, menu_kw=None, budget=None, no_franchise=False, expand=False):
+    def match(s):
+        if s["is_open"] != "true" or (category and s["category"] != category) or (no_franchise and s["is_franchise"] == "true"): return False
+        tip = int(s["delivery_tip"])
+        return any((not menu_kw or re.search(menu_kw, m["name"])) and (budget is None or int(m["price"]) + tip <= budget) for m in M[s["store_id"]])
+    same = [s for s in S if s["dong"] == dong and match(s)]
+    if same and not expand: return "같은 동", [int(s["store_id"]) for s in same]
+    near = [s for s in S if s["dong"] != dong and s["dong"] in ZONE[dong] and match(s)]
+    near.sort(key=lambda s: ZONE[dong][s["dong"]])
+    return "3km 확장", [int(s["store_id"]) for s in same] + [int(s["store_id"]) for s in near]
+if __name__ == "__main__":
+    D = os.path.join(DATA, "demo_seoul62k")
+    S = rd(os.path.join(D, "hackathon_stores.csv")); M = defaultdict(list)
+    for m in rd(os.path.join(D, "hackathon_menus.csv")): M[m["store_id"]].append(m)
+    LB = r"떡볶이\(1인\)|1인.*떡볶이|떡볶이.*1인"
+    cases = [("A 서초4동 간장치킨", ("서초4동", "치킨", "간장", 25000, True), [1, 2, 3, 4]),
+             ("A2 성수2가3동 간장치킨", ("성수2가3동", "치킨", "간장", 25000, True), [43, 44, 45, 46]),
+             ("B 서초2동 1인 떡볶이", ("서초2동", None, LB, 10000, False), [19, 20, 21]),
+             ("B2 성수1가1동 1인 떡볶이", ("성수1가1동", None, LB, 10000, False), [52, 53, 54]),
+             ("C 서초1동 마라탕 1.2만", ("서초1동", None, "마라탕", 12000, False), [11, 12]),
+             ("C2 성수1가2동 마라탕 1.2만", ("성수1가2동", None, "마라탕", 12000, False), [58, 59])]
+    for name, a, exp in cases:
+        st, got = search(S, M, *a); print(name, st, got, "OK" if got == exp else f"!! 기대 {exp}")
+    for name, a in [("C 서초1동 마라탕 1만", ("서초1동", None, "마라탕", 10000, False)), ("C2 성수1가2동 마라탕 1만", ("성수1가2동", None, "마라탕", 10000, False))]:
+        st, got = search(S, M, *a); print(name, "같은 동 0곳 →", st, len(got), "곳", got[:10])
+        byid = {s["store_id"]: s for s in S}
+        for i in got[:5]: s = byid[str(i)]; print("   ", i, s["name"], s["dong"], ZONE[a[0]][s["dong"]], "km")

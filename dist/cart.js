@@ -1,8 +1,19 @@
 import { readLocal, saveLocal } from './db.js';
 
 const CART_KEY = 'seoul-demo-cart';
-export const readCart = () => readLocal(CART_KEY, []);
-export const writeCart = rows => saveLocal(CART_KEY, rows);
+let activeKey = CART_KEY;
+export const readCart = () => readLocal(activeKey, []);
+export const writeCart = rows => saveLocal(activeKey, rows);
+
+export function setCartAccount(id, moveGuest = false) {
+  activeKey = id ? CART_KEY + ':' + id : CART_KEY;
+  if (!id || !moveGuest || readCart().length) return;
+  const guest = readLocal(CART_KEY, []);
+  if (guest.length) {
+    writeCart(guest);
+    localStorage.removeItem(CART_KEY);
+  }
+}
 
 export function addCartMenu(item, store, quantity = 1) {
   return addCartMenus([{ item, quantity }], store);
