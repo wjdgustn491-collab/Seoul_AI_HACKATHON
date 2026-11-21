@@ -226,6 +226,9 @@ td small { display: block; margin-top: 3px; }
 .pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 10px; }
 .menu-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 .menu-form-wide { grid-column: 1 / -1; }
+.menu-identity-fields { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.menu-identity-fields label:first-child { flex: 0 1 17rem; min-width: 0; }
+.menu-identity-fields label:last-child { flex: 0 1 7rem; min-width: 0; }
 .menu-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .menu-form [hidden] { display: none; }
 .menu-form .check { display: flex; align-items: center; min-height: 39px; }
@@ -236,15 +239,34 @@ td small { display: block; margin-top: 3px; }
 .menu-interview label { overflow-wrap: anywhere; }
 .menu-answer-group { min-width: 0; margin: 0; padding: 0; border: 0; }
 .menu-answer-group legend { padding: 0; margin-bottom: 8px; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; }
-.menu-answer-fields, .menu-heat-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.menu-answer-fields label { flex: 1 1 110px; min-width: 0; }
+.menu-answer-fields { display: flex; flex-wrap: wrap; gap: 8px; }
+.menu-answer-fields label { flex: 0 1 6.25rem; min-width: 0; }
+.menu-identity-fields input, .menu-answer-fields input, .menu-composition-row input, .menu-taste-note input,
+.menu-detail-fields :is([name="taste"], [name="portion"], [name="servings"], [name="notes"]) {
+  min-height: 34px; padding: 5px 8px;
+}
+.menu-detail-fields :is([name="taste"], [name="portion"], [name="notes"]) { max-width: 25rem; }
+.menu-detail-fields [name="servings"] { max-width: 7rem; }
 .menu-answer-group > small { display: block; margin-top: 6px; }
-.menu-heat-options .menu-heat-option { display: flex; align-items: center; gap: 7px; flex: 1 1 156px; padding: 8px; background: white; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
-.menu-heat-option input { width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: #b94322; }
-.menu-heat-option:has(:checked) { border-color: #b94322; }
-.menu-heat-option strong { word-break: keep-all; }
-.menu-heat-option small { display: block; margin-top: 2px; font-weight: 400; color: var(--muted); }
-.menu-heat-estimate summary { width: fit-content; cursor: pointer; font-weight: 700; }
+.menu-composition-list { display: grid; gap: 6px; max-width: 19rem; }
+.menu-composition-row { display: flex; align-items: center; gap: 5px; }
+.menu-composition-row input { flex: 1; }
+.menu-composition-row .menu-input-icon { flex: none; width: 34px; min-height: 34px; padding: 0; border-radius: 8px; }
+.menu-taste-list { display: grid; gap: 7px; margin-top: 7px; }
+.menu-taste-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; }
+.menu-taste-row .menu-taste-kind { display: flex; flex: 0 0 5rem; align-items: center; gap: 5px; white-space: nowrap; cursor: pointer; }
+.menu-taste-kind input { width: 15px; height: 15px; margin: 0; }
+.menu-taste-levels { display: flex; gap: 4px; }
+.menu-taste-levels .menu-taste-level { position: relative; display: grid; place-items: center; width: 27px; height: 27px; font-size: 13px; cursor: pointer; }
+.menu-taste-level input { position: absolute; inset: 0; appearance: none; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border-radius: 5px; cursor: inherit; }
+.menu-taste-level span { position: relative; pointer-events: none; }
+.menu-taste-level input:checked { background: #bc4222; border-color: #bc4222; }
+.menu-taste-level input:checked + span { color: white; }
+.menu-taste-level:has(:disabled) { opacity: .48; cursor: default; }
+.menu-taste-note { max-width: 15rem; margin-top: 9px; }
+.menu-other-tastes { margin-top: 8px; }
+.menu-heat-estimate summary, .menu-other-tastes summary { width: fit-content; cursor: pointer; font-weight: 700; }
+.menu-heat-references { display: grid; gap: 2px; margin-top: 6px; }
 .menu-heat-estimate p, .menu-heat-estimate output { font-size: 13px; margin: 6px 0; }
 .menu-heat-estimate output:not(:empty) { display: block; font-weight: 700; }
 .menu-heat-estimate a { text-decoration: underline; }

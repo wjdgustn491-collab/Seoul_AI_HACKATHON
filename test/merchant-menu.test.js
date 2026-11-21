@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import menuDescription from '../api/menu-description.js';
 import recommend from '../api/recommend.js';
-import { estimateMenuHeat, heatLevels, mentionsHeat, readRecordedTaste } from '../dist/menu-interview.js';
+import { estimateMenuHeat, heatLevels, mentionsHeat, readRecordedTaste, readTasteProfile, tasteKinds } from '../dist/menu-interview.js';
 
 async function post(handler, body) {
   const res = {
@@ -175,6 +175,88 @@ test('heat only estimates from valid quantities and offers recognizable anchors'
   assert.equal(estimateMenuHeat(10000, 41, 40), null);
   assert.equal(estimateMenuHeat(0, 20, 300), null);
   assert.equal(estimateMenuHeat(NaN, 20, 300), null);
+});
+
+const detailedDraft = {
+  action: 'interview-draft', name: '자몽허니블랙티', price: 5200,
+  answers: {
+    portion: { grams: 350, servings: 1 }, composition: ['자몽', '꿀', '홍차'],
+    ratings: { sweet: 4, sour: 2 },
+  },
+};
+
+test('taste suggestions use menu and composition cues without assigning strengths', async t => {
+  setGeminiKey(t, undefined);
+  const suggest = (name, composition) => post(menuDescription, { action: 'taste-suggestions', name, composition });
+  assert.deepEqual((await suggest('자몽허니블랙티', ['홍차'])).data.suggestions, ['sweet', 'sour']);
+  assert.deepEqual((await suggest('불막창', ['막창'])).data.suggestions, ['spicy']);
+  assert.deepEqual((await suggest('오늘의 메뉴', ['두부', '참깨', '간장'])).data.suggestions, ['nutty', 'salty']);
+  assert.deepEqual((await suggest('안 매운 불막창', ['막창'])).data.suggestions, []);
+  assert.equal((await suggest('차', '꿀과 자몽')).status, 400);
+
+  process.env.GEMINI_API_KEY = 'test-key';
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.equal(new URL(url).hostname, 'generativelanguage.googleapis.com');
+    const input = JSON.parse(JSON.parse(init.body).contents[0].parts[0].text);
+    assert.deepEqual(input, { name: '오늘의 차', composition: ['찻잎'] });
+    return Response.json({ candidates: [{ content: { parts: [{ text: '{"suggestions":["bitter"]}' }] } }] });
+  });
+  assert.deepEqual((await suggest('오늘의 차', ['찻잎'])).data, { suggestions: ['bitter'], provider: 'gemini' });
+});
+
+test('detailed interview drafts keep ingredient rows and confirmed taste ratings in the existing storage fields', async t => {
+  setGeminiKey(t, undefined);
+  const draftWith = answers => post(menuDescription, { ...detailedDraft, answers: { ...detailedDraft.answers, ...answers } });
+  const result = await draftWith({});
+  assert.equal(result.status, 200);
+  assert.equal(result.data.details.portion, '350g / 1인분');
+  assert.equal(result.data.details.notes, '자몽, 꿀, 홍차');
+  assert.deepEqual(readTasteProfile(result.data.details.taste), { note: '', ratings: { sweet: 4, sour: 2 } });
+  assert.deepEqual(readTasteProfile('크리미한 로제 · 맵기 3/5'), { note: '크리미한 로제', ratings: { spicy: 3 } });
+  assert.match(result.data.description, /350g, 1인분입니다\. 기본 구성은 자몽, 꿀, 홍차입니다\. 뚜렷한 단맛과 은은한 신맛/);
+  assert.doesNotMatch(result.data.description, /쓴맛|매운맛/);
+
+  const full = await draftWith({
+    composition: Array.from({ length: 8 }, (_, index) => (index + 1) + '가'.repeat(27)),
+    ratings: Object.fromEntries(tasteKinds.map(({ key }) => [key, 1])),
+    features: '살짝 말린 재료를 씁니다',
+  });
+  assert.equal(full.status, 200);
+  assert.ok(full.data.description.length <= 240);
+  assert.ok(full.data.details.notes.length <= 240);
+  assert.ok(full.data.details.taste.length <= 60);
+  assert.match(full.data.description, /살짝 말린 재료를 씁니다\.$/);
+  for (const answers of [
+    { composition: [] }, { composition: ['가'.repeat(29)] }, { composition: Array(9).fill('자몽') },
+    { ratings: { sour: 0 } }, { ratings: { sour: '2' } }, { ratings: { unknown: 2 } }, { ratings: {} },
+  ]) assert.equal((await draftWith(answers)).status, 400);
+});
+
+test('Gemini writes detailed prose from confirmed facts and keeps an optional recipe phrase removable', async t => {
+  setGeminiKey(t, 'test-key');
+  const payload = {
+    ...detailedDraft, name: '마라로제엽떡',
+    answers: {
+      portion: { servings: 2 }, composition: ['밀떡', '로제 소스'], ratings: { spicy: 4 }, tasteNote: '크리미한 로제',
+    },
+  };
+  let description = '밀떡과 로제 소스를 담은 2인분 메뉴예요. 크리미한 로제에 뚜렷한 매운맛을 느낄 수 있어요.';
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.equal(new URL(url).hostname, 'generativelanguage.googleapis.com');
+    const payload = JSON.parse(JSON.parse(init.body).contents[0].parts[0].text);
+    assert.deepEqual(payload.tastes, [{ label: '매운맛', level: 4, strength: '뚜렷한' }]);
+    assert.deepEqual(payload.featureOptions, ['쫄깃한 떡', '걸쭉한 소스']);
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ description, choice: 2 }) }] } }] });
+  });
+  const result = await post(menuDescription, payload);
+  assert.equal(result.data.provider, 'gemini');
+  assert.equal(result.data.details.taste, '크리미한 로제 · 맵기 4/5');
+  assert.equal(result.data.suggestion.text, '걸쭉한 소스');
+  assert.equal(result.data.description, description + ' ' + result.data.suggestion.sentence);
+  description = description.replace('뚜렷한 매운맛', '은은한 매운맛');
+  const fallback = await post(menuDescription, payload);
+  assert.equal(fallback.data.provider, 'rules');
+  assert.match(fallback.data.description, /뚜렷한 매운맛/);
 });
 
 test('recommendations apply saved menu details, prices and removals only to the matching browser', async t => {

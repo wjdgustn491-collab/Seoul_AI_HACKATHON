@@ -70,6 +70,11 @@
   .reason { font-size: 14px; }
   .quote { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 8px; }
   .quote small { display: block; font-size: 11px; }
+  .quote summary { cursor: pointer; }
+  .quote summary small { display: inline; }
+  .quote-preview { display: block; }
+  .quote[open] .quote-preview { display: none; }
+  .quote p { margin: 4px 0 0; }
   .order { border: 0; border-radius: 12px; padding: 10px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
   .noad { font-size: 12px; color: var(--muted); text-align: center; }
   .typing { color: var(--muted); font-size: 13px; }
@@ -221,6 +226,13 @@ function renderChips(chips = []) {
 
 const QUOTE_MAX = 40;
 const short = (text, max) => text.length > max ? text.slice(0, max - 1) + '…' : text;
+function menuIntro({ quote, menuDescription }) {
+  const description = menuDescription || quote;
+  if (!description) return '';
+  if (description.length <= QUOTE_MAX) return `<div class="quote"><small>사장님 메뉴 소개</small>“${esc(description)}”</div>`;
+  return `<details class="quote"><summary><small>사장님 메뉴 소개</small><span class="quote-preview">“${esc(short(quote || description, QUOTE_MAX))}”</span></summary><p>${esc(description)}</p></details>`;
+}
+
 function card(c, i, common = []) {
   const params = new URLSearchParams({ store: c.storeId, from: 'recommend' });
   if (c.menuId) params.set('menu', c.menuId);
@@ -245,7 +257,7 @@ function card(c, i, common = []) {
     ${own.length ? `<div class="checks">${own.map(x => '✓ ' + esc(x)).join(' ')}</div>` : ''}
     ${tags ? `<div class="tags">${tags}</div>` : ''}
     ${c.reason ? `<div class="reason">${esc(c.reason)}</div>` : ''}
-    ${c.quote ? `<div class="quote"><small>사장님 메뉴 소개</small>“${esc(short(c.quote, QUOTE_MAX))}”</div>` : ''}
+    ${menuIntro(c)}
     <div class="card-actions">
       <a class="order" href="index.html?${esc(params.toString())}">가게·메뉴 보기</a>
       ${c.menuId ? '<button type="button" class="btn add-recommendation">장바구니 담기</button>' : ''}

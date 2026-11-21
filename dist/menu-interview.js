@@ -2,6 +2,42 @@ export const maxMenuGrams = 100000;
 export const maxMenuServings = 20;
 export const maxSauceShu = 16000000;
 export const shortAnswerLimits = { composition: 32, taste: 24, features: 24 };
+export const compositionLimits = { count: 8, length: 28 };
+export const menuTasteLimit = 60;
+export const tasteKinds = [
+  { key: 'sweet', label: '단맛' },
+  { key: 'sour', label: '신맛' },
+  { key: 'spicy', label: '매운맛', storedLabel: '맵기' },
+  { key: 'salty', label: '짠맛' },
+  { key: 'bitter', label: '쓴맛' },
+  { key: 'nutty', label: '고소함' },
+  { key: 'savory', label: '감칠맛' },
+  { key: 'mild', label: '담백함' },
+];
+export const tasteStrengths = ['아주 은은한', '은은한', '적당한', '뚜렷한', '강한'];
+
+export function formatTasteProfile(note, ratings) {
+  const levels = tasteKinds.filter(({ key }) => key !== 'spicy' && ratings[key])
+    .map(({ key, label }) => label + ' ' + ratings[key] + '/5').join(',');
+  const heat = ratings.spicy && '맵기 ' + ratings.spicy + '/5';
+  return [note, levels, heat].filter(Boolean).join(' · ');
+}
+
+export function readTasteProfile(value) {
+  const parts = (typeof value === 'string' ? value.trim() : '').split(/\s*·\s*/u);
+  const ratings = {};
+  const notes = parts.filter(part => {
+    const matches = part.split(',').map(text => {
+      const match = text.trim().match(/^(\S+) ([1-5])\/5$/u);
+      const kind = tasteKinds.find(({ label, storedLabel }) => (storedLabel ?? label) === match?.[1]);
+      return kind && [kind.key, Number(match[2])];
+    });
+    if (!matches.every(Boolean)) return true;
+    for (const [key, level] of matches) ratings[key] = level;
+    return false;
+  });
+  return { note: notes.join(' · ').trim(), ratings };
+}
 
 export const heatLevels = [
   { number: 1, example: '진라면 순한맛', label: '살짝 매움' },
@@ -24,7 +60,7 @@ export function mentionsHeat(value) {
   const withoutNegations = value
     .replace(/안\s*매(?:운|워|움)|맵지\s*않[가-힣]*|(?:맵기|매운\s*맛)(?:가|이|은|도)?\s*없[가-힣]*/g, '')
     .replace(/(?:청양고추|고춧?가루|고추장|핫소스|캡사이신)(?:이|을|는)?\s*(?:없이|제외|빼고)/g, '');
-  return /매(?:운|콤|워|움)|맵기|얼큰|칼칼|불닭|마라|청양고추|고춧?가루|고추기름|고추장|핫소스|캡사이신|할라피뇨|페퍼론치노/.test(withoutNegations);
+  return /매(?:운|콤|워|움)|맵기|얼큰|칼칼|불(?:닭|막창|곱창|족발|떡볶이)|마라|청양고추|고춧?가루|고추기름|고추장|핫소스|캡사이신|할라피뇨|페퍼론치노/.test(withoutNegations);
 }
 
 export function estimateMenuHeat(shu, sauceGrams, totalGrams) {
