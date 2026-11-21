@@ -17,7 +17,8 @@ function makeRun(engine) {
   const turn = async (state, action) => {
     const before = new Set(state?.exposed ?? []);
     const memoryBefore = new Map(memory);
-    const r = await engine.handle(state, action, noAI);
+    let r = await engine.handle(state, action, noAI);
+    if (r.reply.subMenu) r = await engine.handle(r.state, { type: 'apply', cond: { sub: '' } }, noAI); // 세부 메뉴 질문 → "상관없어요"
     for (const id of r.state.exposed) if (!before.has(id)) memory.set(id, (memory.get(id) ?? 0) + 1);
     r.memoryBefore = memoryBefore; r.memoryAfter = new Map(memory); // 이 요청 전·후 메모리 값
     return r;
@@ -97,7 +98,7 @@ await report('Math.random 고정 (분석용, 노출 값만으로 순서가 바�
   const realRandom = Math.random; Math.random = () => 0.5;
   try {
     const first = createEngine(snapshot), second = createEngine(snapshot);
-    const ask = async e => { const a = await e.handle(undefined, { type: 'dong', dong: GU }, noAI); return (await e.handle(a.state, { type: 'text', text: QUESTION }, noAI)).reply.cards.map(c => nameOf.get(c.storeId)).join(' > '); };
+    const ask = async e => { const a = await e.handle(undefined, { type: 'dong', dong: GU }, noAI); let r = await e.handle(a.state, { type: 'text', text: QUESTION }, noAI); if (r.reply.subMenu) r = await e.handle(r.state, { type: 'apply', cond: { sub: '' } }, noAI); return r.reply.cards.map(c => nameOf.get(c.storeId)).join(' > '); };
     const a1 = await ask(first), a2 = await ask(first), b1 = await ask(second);
     console.log('\n# 인스턴스가 바뀌면');
     console.table([{ 상황: '인스턴스1 첫 요청', TOP3: a1 }, { 상황: '인스턴스1 두 번째 요청', TOP3: a2 }, { 상황: '인스턴스2(재시작) 첫 요청', TOP3: b1 }]);
