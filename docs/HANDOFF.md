@@ -8,7 +8,7 @@
 
 ## 현재 상태
 - 브랜치 PR #1(P0~P1 피드백 반영)은 `main`에 병합됨. 그 뒤 작업은 **이 브랜치 로컬에만** 있다. 2026-11-21 `origin/main`(7e96503)을 합침(아래 1번).
-- 실행: `node scripts/build-data.mjs` (data/ → dist/data, 약 2초) → `node --env-file-if-exists=.env.local local/dev.mjs` → http://localhost:4173/recommend.html
+- 실행: `node scripts/build-data.mjs` (루트 원본 CSV → dist/data, 약 2초) → `node --env-file-if-exists=.env.local local/dev.mjs` → http://localhost:4173/recommend.html
   - `local/`은 `.git/info/exclude`로 제외된 로컬 전용 폴더(dev 서버, `DEV_DELAY_MS=3000`으로 응답 지연 가능).
 - AI 없이 동작: `LLM_PROVIDER=none` 또는 `RECOMMENDATION_MODE=rules`(로컬 dev 서버 기본값은 none).
 
@@ -34,7 +34,7 @@
    - `dist/recommend.html`: 팀의 폰 프레임 디자인·로그인 세션 채택(다크 모드 제거됨). 스크롤 컨테이너가 `<main>`으로 바뀌어 자동 스크롤을 거기에 맞춤 — **브라우저에서 눈으로 확인은 아직**.
    - 테스트: `recommend-api`는 동 데이터 기준으로, `merchant-menu`의 "수정 없는 브라우저" 확인은 동 데이터 경로 기준으로 바꿈.
    - 실데이터에서 "안 매운 치킨"은 화양동 0곳(메뉴에 '맵지 않음' 표기가 드묾) — 팀의 엄격 규칙대로 동작하는 것. 완화 여부는 6번 튜닝에서.
-2. **배포용 데이터** — `dist/data`(약 74MB)는 빌드 산출물이라 커밋하지 않았다. Vercel 빌드에 `node scripts/build-data.mjs`를 넣고 `vercel.json`에 함수 includeFiles(`dist/data/**`)를 추가. 저장소 루트의 원본(팀이 올린 확장자 없는 파일)과 `data/` 중 하나로 정리.
+2. ~~배포용 데이터~~ — **완료(배포 확인 전)**. `scripts/build-data.mjs`가 저장소 루트의 팀 원본(`stores_excel`, `dong_centroids`, `delivery_zone`, `hackathon_menus_part1~4.csv`)을 직접 읽는다(전과 출력 동일 확인) → 로컬 `data/` 폴더는 더 필요 없음. `vercel.json`에 `buildCommand`·`includeFiles: dist/data/**` 추가, `.gitignore`에 `dist/data/`. 남은 확인: 실제 Vercel 빌드·함수 크기. 참고: `outputDirectory`가 `dist`라 동별 JSON도 정적 파일로 공개된다(원본 CSV가 이미 공개 저장소에 있으므로 문제는 아님).
 3. **DB 후속(팀 합의 필요)** — `supabase/migrations`의 snapshot에 `review_count` 추가, 노출 횟수 +1 RPC. 근거: `C:\3th_project\서울_해커톤\analysis-rating-impressions.md`.
 4. **장바구니** — `dist/recommend.html`의 `renderCards` 주문 버튼은 Supabase 데모 카탈로그(4,672곳)로 조회해서, 새 데이터에만 있는 가게는 담기 실패 가능.
 5. **새로고침 정책 결정** — 지금은 새로고침=처음부터(`SESSION_KEY` 처리부), 다른 화면 갔다 오면 `state.step`에서 이어짐. 요청이 엇갈려 결정 필요.

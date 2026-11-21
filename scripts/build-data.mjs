@@ -1,19 +1,19 @@
-// data/의 CSV를 동별 JSON으로 나눈다 → dist/data/
+// 저장소 루트의 팀 원본 CSV(확장자 없는 파일 포함)를 동별 JSON으로 나눈다 → dist/data/ (Vercel 빌드에서도 실행)
 // 메뉴가 약 30MB라 화면·서버가 한 번에 다 읽지 않도록, 주문자 동 + 3km 안의 동 파일만 읽게 한다.
 // 실행: node scripts/build-data.mjs   (데이터 값은 바꾸지 않고 형식만 바꾼다)
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { readCsvObjects } from '../lib/csv.js';
 
 const root = new URL('../', import.meta.url);
-const read = name => readCsvObjects(readFileSync(new URL('data/' + name, root), 'utf8'));
+const read = name => readCsvObjects(readFileSync(new URL(name, root), 'utf8'));
 const out = new URL('dist/data/', root);
 rmSync(out, { recursive: true, force: true });
 mkdirSync(new URL('dong/', out), { recursive: true });
 
-const centroids = read('dong_centroids.csv');
-const stores = read('hackathon_stores_excel.csv');
+const centroids = read('dong_centroids');
+const stores = read('stores_excel');
 const menus = [1, 2, 3, 4].flatMap(i => read(`hackathon_menus_part${i}.csv`));
-const zoneRows = read('delivery_zone_3km.csv');
+const zoneRows = read('delivery_zone');
 
 // 동 → 파일 번호 (파일 이름에 한글을 쓰지 않으려고)
 const dongs = centroids.map(c => c.dong);

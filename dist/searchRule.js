@@ -1,4 +1,4 @@
-// 검색 규칙 — data/search_rule.py(팀 원본)를 그대로 옮긴 것.
+// 검색 규칙 — search_rule(팀 원본, 저장소 루트)를 그대로 옮긴 것.
 // 1단계 같은 동 → (결과 0곳 또는 '더 보기') 2단계 delivery_zone_3km 기준 3km 안의 동까지, 거리순.
 
 // delivery_zone_3km 행 → { customer_dong: { store_dong: distance_km } }
