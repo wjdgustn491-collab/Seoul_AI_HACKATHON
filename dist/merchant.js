@@ -234,7 +234,7 @@ async function requestMenuText(form, payload, waiting) {
 function portionQuestion(question, { grams, servings }) {
   return '<fieldset class="menu-answer-group"><legend>' + esc(question) + '</legend>' +
     '<div class="menu-answer-fields">' +
-    '<label>중량 (g)<input id="menu-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" placeholder="320" value="' + esc(grams) + '"></label>' +
+    '<label>중량 <input id="menu-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" placeholder="320" value="' + esc(grams) + '"></label>' +
     '<label>인분<input id="menu-servings" type="number" min="1" max="' + maxMenuServings + '" inputmode="numeric" placeholder="2" value="' + esc(servings) + '"></label></div>' +
     '<small class="muted">중량 또는 인분 중 하나 이상</small></fieldset>';
 }
@@ -262,8 +262,8 @@ function heatReference(portion, visible) {
     '<a href="' + heatReferenceUrl + '" target="_blank" rel="noopener noreferrer">라면 기준값</a></p>' +
     '<div class="menu-answer-fields">' +
     '<label>매운 재료의 SHU<input id="menu-spice-shu" type="number" min="1" max="' + maxSauceShu + '" inputmode="numeric" placeholder="10000"></label>' +
-    '<label>넣은 재료 (g)<input id="menu-spice-grams" type="number" min="0.01" max="' + maxMenuGrams + '" step="any" inputmode="decimal" placeholder="80"></label>' +
-    '<label>완성 음식 (g)<input id="menu-finished-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" value="' + esc(portion.grams) + '"></label></div>' +
+    '<label>넣은 재료 <input id="menu-spice-grams" type="number" min="0.01" max="' + maxMenuGrams + '" step="any" inputmode="decimal" placeholder="80"></label>' +
+    '<label>완성 음식 <input id="menu-finished-grams" type="number" min="1" max="' + maxMenuGrams + '" inputmode="numeric" value="' + esc(portion.grams) + '"></label></div>' +
     '<output id="menu-heat-result" aria-live="polite"></output></details>';
 }
 
