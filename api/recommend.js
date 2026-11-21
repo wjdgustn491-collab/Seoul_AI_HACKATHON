@@ -115,7 +115,8 @@ export default async function recommend(req, res) {
   try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; }
   catch { return res.status(400).json({ error: "추천 요청을 읽을 수 없습니다." }); }
   const action = body?.action;
-  if (!["dong", "text", "apply", "option"].includes(action?.type) ||
+  if (!["dong", "text", "apply", "option", "stage"].includes(action?.type) ||
+      (action.type === "stage" && (body.flow !== "guided" || !["people", "menu", "taste", "extra", "budget"].includes(action.stage))) ||
       (action.type === "text" && (typeof action.text !== "string" || action.text.length > 300)) ||
       (body.browserKey !== undefined && (typeof body.browserKey !== "string" ||
         !/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(body.browserKey))) ||
@@ -137,7 +138,7 @@ export default async function recommend(req, res) {
     if (action.type === "dong" && !edited.regions.includes(action.dong)) {
       return res.status(400).json({ error: "목록에 표시된 지역을 골라 주세요." });
     }
-    return respond(res, edited, body.state, action, started, Date.now() - started);
+    return respond(res, edited, body.state, { ...action, staged: body.flow === "guided" }, started, Date.now() - started);
   }
 
   if (action.type === "dong" && !(hasDong(action.neighborhood) && guOfDong(action.neighborhood) === action.dong)) {
@@ -161,7 +162,7 @@ export default async function recommend(req, res) {
   // 다른 동 엔진으로 넘어온 대화면 주문자 동을 맞춰 준다
   const state = body.state && action.type !== "dong" && body.state.neighborhood !== customerDong
     ? { ...body.state, dong: guOfDong(customerDong), neighborhood: customerDong } : body.state;
-  return respond(res, current, state, action, started, catalogMs);
+  return respond(res, current, state, { ...action, staged: body.flow === "guided" }, started, catalogMs);
 }
 
 async function respond(res, current, state, action, started, catalogMs) {

@@ -32,7 +32,7 @@ export function addCartMenus(lines, store) {
     if (!Number.isInteger(quantity) || quantity < 1 || nextQuantity > 20) {
       throw new Error('메뉴당 최대 20개까지 담을 수 있습니다.');
     }
-    const row = { ...item, store_name: store.name, quantity: nextQuantity, selected: true };
+    const row = { ...item, store_name: store.name, quantity: nextQuantity, selected: !item.catalogOnly };
     if (index === -1) rows.push(row);
     else rows[index] = row;
     total += nextQuantity;
