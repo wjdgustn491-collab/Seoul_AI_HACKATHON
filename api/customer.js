@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { supabaseConfig } from "../dist/supabase-config.js";
 import { AGREEMENT_VERSION, validSignupDemographics } from "../dist/signup.js";
 
@@ -87,34 +88,54 @@ function authError(res, reply) {
   return error(res, 400, "아이디 또는 비밀번호를 확인해 주세요.");
 }
 
+function protectPassword(email, password) {
+  const key = process.env.BAPPILOT_PASSWORD_PEPPER;
+  if (!key || key.length < 32) return null;
+  // Give Auth a fixed-length ASCII credential, scoped to the account and exact input.
+  const digest = createHmac("sha256", key).update(JSON.stringify(["bappilot-password-v1", email, password])).digest("hex");
+  return "Bapp1!v1" + digest;
+}
+
 async function signIn(res, credentials, registering) {
   const value = credentials.identifier ?? credentials.email;
   const identifier = typeof value === "string" ? value.trim().toLowerCase() : "";
   const password = credentials.password;
   const username = USERNAME.test(identifier);
   if ((!username && (registering || identifier.length > 254 || !EMAIL.test(identifier))) ||
-      typeof password !== "string" || !password || Buffer.byteLength(password) > 72) {
+      typeof password !== "string" || !password) {
     return error(res, 400, "아이디와 비밀번호를 확인해 주세요.");
   }
+  const email = username ? identifier + ACCOUNT_DOMAIN : identifier;
+  const appAccount = email.endsWith(ACCOUNT_DOMAIN);
+  const canUseOriginal = Buffer.byteLength(password) <= 72;
+  if (!appAccount && !canUseOriginal) return error(res, 400, "아이디와 비밀번호를 확인해 주세요.");
+  const protectedPassword = appAccount ? protectPassword(email, password) : null;
   if (registering) {
     const name = typeof credentials.name === "string" ? credentials.name.trim() : "";
     const { koreanAge, gender } = credentials;
-    if (!name || name.length > 30 || password.length < 8 || credentials.agreements !== AGREEMENT_VERSION ||
+    if (!name || name.length > 30 || credentials.agreements !== AGREEMENT_VERSION ||
         !validSignupDemographics(koreanAge, gender)) {
       return error(res, 400, "가입 정보와 필수 동의를 확인해 주세요.");
     }
+    if (!protectedPassword) return error(res, 503, "가입 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
     const enrollment = await supabase("/functions/v1/customer-enroll", "POST", {
-      username: identifier, name, password, agreements: AGREEMENT_VERSION, koreanAge, gender,
+      username: identifier, name, password: protectedPassword, agreements: AGREEMENT_VERSION, koreanAge, gender,
     });
     if (!enrollment.ok) {
       if (enrollment.status === 409) return error(res, 409, "이미 사용 중인 아이디입니다.", "username_taken");
       if (enrollment.status === 429) return error(res, 429, "가입 요청이 많아요. 잠시 후 다시 시도해 주세요.");
       if (enrollment.status >= 500 || enrollment.status === 401) return error(res, 503, "가입 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
-      return error(res, 400, "가입 정보를 확인해 주세요. 비밀번호는 8자 이상이어야 합니다.");
+      return error(res, 400, "가입 정보를 확인해 주세요.");
     }
   }
-  const email = username ? identifier + ACCOUNT_DOMAIN : identifier;
-  const result = await auth("token?grant_type=password", "POST", { email, password });
+  if (!protectedPassword && !canUseOriginal) return error(res, 503, "로그인 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+  let result = await auth("token?grant_type=password", "POST", { email, password: protectedPassword ?? password });
+  const invalidCredentials = result.status === 400 &&
+    (result.data?.error_code === "invalid_credentials" || (!result.data?.error_code && result.data?.error === "invalid_grant"));
+  if (!registering && protectedPassword && canUseOriginal && invalidCredentials) {
+    // Accounts enrolled before password protection retain their original credential.
+    result = await auth("token?grant_type=password", "POST", { email, password });
+  }
   if (!result.ok) return authError(res, result);
   const account = profile(result.data?.user);
   setSession(res, result.data);

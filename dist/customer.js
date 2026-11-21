@@ -327,7 +327,7 @@ function authForm() {
     '<h2>주문자 로그인</h2>' +
     (state.authNote ? '<p class="auth-notice" role="status">' + esc(state.authNote) + '</p>' : "") +
     '<label>아이디 또는 이메일<input name="identifier" autocomplete="username" autocapitalize="none" required maxlength="254"></label>' +
-    '<label>비밀번호<input name="password" type="password" autocomplete="current-password" required maxlength="72"></label>' +
+    '<label>비밀번호<input name="password" type="password" autocomplete="current-password" required></label>' +
     '<button class="primary" type="submit">로그인</button>' +
     button("처음이신가요? 회원가입", "signup") +
     '</form>';
@@ -362,8 +362,8 @@ function signupForm() {
     '<option value="female"' + (data.gender === "female" ? " selected" : "") + '>여성</option></select></label>' +
     '<label>이름<input name="name" autocomplete="name" required maxlength="30" value="' + esc(data.name) + '"></label>' +
     '<label>아이디<input name="identifier" autocomplete="username" autocapitalize="none" required maxlength="24" value="' + esc(data.identifier) + '"></label>' +
-    '<label>비밀번호<input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72"></label>' +
-    '<label>비밀번호 확인<input name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="72"></label>' +
+    '<label>비밀번호<input name="password" type="password" autocomplete="new-password" required></label>' +
+    '<label>비밀번호 확인<input name="passwordConfirm" type="password" autocomplete="new-password" required></label>' +
     '<p class="muted signup-hint">가입 시 계산한 세는나이와 선택한 성별이 계정에 기록됩니다. 휴대전화 번호와 생년월일은 이 화면에서만 확인합니다.</p>' +
     '<p id="signup-validation" class="signup-validation" role="status"></p>' +
     '<button type="submit" class="primary" disabled>다음</button></form></section>';

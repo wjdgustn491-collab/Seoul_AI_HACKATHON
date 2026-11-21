@@ -7,6 +7,15 @@ const account = "11111111-1111-4111-8111-111111111111";
 const browser = "22222222-2222-4222-8222-222222222222";
 const origin = "https://seoul-ai-hackathon.vercel.app";
 
+function setPasswordKey(t) {
+  const previous = process.env.BAPPILOT_PASSWORD_PEPPER;
+  process.env.BAPPILOT_PASSWORD_PEPPER = "test-only-credential-key".repeat(2);
+  t.after(() => {
+    if (previous === undefined) delete process.env.BAPPILOT_PASSWORD_PEPPER;
+    else process.env.BAPPILOT_PASSWORD_PEPPER = previous;
+  });
+}
+
 async function request(body, headers = {}) {
   const result = { headers: {} };
   const response = {
@@ -46,6 +55,7 @@ test("login returns a profile and stores tokens only in protected cookies", asyn
 });
 
 test("registration requires agreement and signs in the newly enrolled username", async t => {
+  setPasswordKey(t);
   const payloads = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     payloads.push(JSON.parse(options.body));
@@ -57,19 +67,69 @@ test("registration requires agreement and signs in the newly enrolled username",
     });
   });
   const form = {
-    action: "register", identifier: "Sample_1", password: "test-only-password", name: "Tester",
+    action: "register", identifier: "Sample_1", password: "1", name: "Tester",
     phone: "unused", birth: "unused", koreanAge: 27, gender: "female",
   };
   assert.equal((await request(form)).status, 400);
+  assert.equal((await request({ ...form, identifier: "한글아이디", agreements: AGREEMENT_VERSION })).status, 400);
   assert.equal(payloads.length, 0);
   const result = await request({ ...form, agreements: AGREEMENT_VERSION });
   assert.equal(result.status, 200);
   assert.equal(result.body.account.identifier, "sample_1");
   assert.equal(result.headers["Set-Cookie"].length, 2);
+  const storedCredential = payloads[0].password;
+  assert.match(storedCredential, /^Bapp1!v1[0-9a-f]{64}$/);
   assert.deepEqual(payloads, [
-    { username: "sample_1", name: "Tester", password: form.password, agreements: AGREEMENT_VERSION, koreanAge: 27, gender: "female" },
-    { email: "sample_1@bappilot.invalid", password: form.password },
+    { username: "sample_1", name: "Tester", password: storedCredential, agreements: AGREEMENT_VERSION, koreanAge: 27, gender: "female" },
+    { email: "sample_1@bappilot.invalid", password: storedCredential },
   ]);
+});
+
+test("registered passwords preserve long Unicode input and spaces through subsequent sign-in", async t => {
+  setPasswordKey(t);
+  let credential;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const { password } = JSON.parse(options.body);
+    if (url.endsWith("/functions/v1/customer-enroll")) {
+      credential = password;
+      return Response.json({ created: true }, { status: 201 });
+    }
+    if (password !== credential) return Response.json({ error_code: "invalid_credentials" }, { status: 400 });
+    return Response.json({
+      access_token: "auth-token", refresh_token: "refresh-token",
+      user: { id: account, email: "sample_1@bappilot.invalid" },
+    });
+  });
+  const password = " 비밀🔑 ".repeat(30);
+  const form = { identifier: "Sample_1", password, name: "Tester", koreanAge: 27, gender: null, agreements: AGREEMENT_VERSION };
+  assert.equal((await request({ ...form, action: "register" })).status, 200);
+  assert.match(credential, /^Bapp1!v1[0-9a-f]{64}$/);
+  assert.equal((await request({ action: "login", identifier: "Sample_1", password })).status, 200);
+  assert.equal((await request({ action: "login", identifier: "sample_1", password: password.trim() })).status, 400);
+});
+
+test("existing username credentials remain valid without retrying an upstream rate limit", async t => {
+  setPasswordKey(t);
+  const passwords = [];
+  let rateLimited = false;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const { password } = JSON.parse(options.body);
+    assert.match(url, /grant_type=password$/);
+    passwords.push(password);
+    if (rateLimited) return Response.json(null, { status: 429 });
+    if (password !== "original-password") return Response.json({ error_code: "invalid_credentials" }, { status: 400 });
+    return Response.json({
+      access_token: "auth-token", refresh_token: "refresh-token",
+      user: { id: account, email: "sample_1@bappilot.invalid" },
+    });
+  });
+  const form = { action: "login", identifier: "sample_1", password: "original-password" };
+  assert.equal((await request(form)).status, 200);
+  assert.equal(passwords.length, 2);
+  assert.equal(passwords[1], form.password);
+  rateLimited = true;
+  assert.equal((await request(form)).status, 429);
+  assert.equal(passwords.length, 3);
 });
 
 test("a refreshed request carries the authenticated token and the expected account", async t => {

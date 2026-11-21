@@ -40,7 +40,7 @@ export function signupDetailsError(values, now = new Date()) {
     return "만 14세 이상인 생년월일을 숫자 8자리로 입력해 주세요.";
   }
   if (!/^[a-z][a-z0-9_]{3,23}$/i.test((values.identifier || "").trim())) return "아이디는 영문으로 시작하고 영문·숫자·밑줄 4~24자여야 합니다.";
-  if (!values.password || values.password.length < 8 || new TextEncoder().encode(values.password).length > 72) return "비밀번호는 8자 이상, 72바이트 이하여야 합니다.";
+  if (!values.password) return "비밀번호를 입력해 주세요.";
   if (values.password !== values.passwordConfirm) return "비밀번호 확인이 일치하지 않습니다.";
   return "";
 }

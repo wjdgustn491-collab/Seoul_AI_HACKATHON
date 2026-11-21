@@ -10,6 +10,11 @@ test("signup validates the Korean age boundary and matching passwords", () => {
   assert.equal(signupDetailsError(valid, now), "");
   assert.match(signupDetailsError({ ...valid, birth: "20121122" }, now), /14세/);
   assert.match(signupDetailsError({ ...valid, passwordConfirm: "different" }, now), /일치/);
+  for (const password of ["1", "🔑", " ", "가".repeat(120)]) {
+    assert.equal(signupDetailsError({ ...valid, password, passwordConfirm: password }, now), "");
+  }
+  assert.match(signupDetailsError({ ...valid, password: "", passwordConfirm: "" }, now), /입력/);
+  assert.match(signupDetailsError({ ...valid, identifier: "한글아이디" }, now), /영문/);
 });
 
 test("typed birth dates produce Korean counting age without accepting invalid dates", () => {
