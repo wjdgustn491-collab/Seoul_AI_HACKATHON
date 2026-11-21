@@ -1,4 +1,6 @@
-# 밥파일럿 추천 — 인수인계 (2026-11-21)
+# 밥파일럿 추천 — 인수인계 (2026-11-21, 이전 단계)
+
+> 이 문서는 이전 단계 기록이다. 최신 상태는 `docs/handoff/2026-11-21-recommend-questions.md`를 먼저 본다.
 
 > 이 문서의 기준: 로컬 `C:\3th_project\Seoul_AI_HACKATHON`, 브랜치 `feature/recommend-feedback`.
 > 참고: 요청 양식에 있던 "조건 기억 버그 수정 · 질문 세트 대응 · 평가 스크립트"는 이번 작업에서 다루지 않았다(해당 코드·스크립트 없음). 아래 "평가"는 실제로 있는 테스트·분석 스크립트 기준이다.
@@ -8,8 +10,8 @@
 
 ## 현재 상태
 - 브랜치 PR #1(P0~P1 피드백 반영)은 `main`에 병합됨. 그 뒤 작업은 **이 브랜치 로컬에만** 있다. 2026-11-21 `origin/main`(7e96503)을 합침(아래 1번).
-- 실행: `node scripts/build-data.mjs` (루트 원본 CSV → dist/data, 약 2초) → `node --env-file-if-exists=.env.local local/dev.mjs` → http://localhost:4173/recommend.html
-  - `local/`은 `.git/info/exclude`로 제외된 로컬 전용 폴더(dev 서버, `DEV_DELAY_MS=3000`으로 응답 지연 가능).
+- 실행: `node scripts/build-data.mjs` (루트 원본 CSV → dist/data, 약 2초) → `npm run dev` → http://localhost:4173/recommend.html
+  - dev 서버는 `scripts/dev.mjs`(`DEV_DELAY_MS=3000`으로 응답 지연 가능). `local/`은 캐시 폴더(.gitignore).
 - AI 없이 동작: `LLM_PROVIDER=none` 또는 `RECOMMENDATION_MODE=rules`(로컬 dev 서버 기본값은 none).
 
 ## 완료한 것 (파일 → 이유)
