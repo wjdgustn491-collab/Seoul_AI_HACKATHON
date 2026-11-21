@@ -315,6 +315,8 @@ test('recommendations apply saved menu details, prices and removals only to the 
   assert.equal(noMenus.status, 200);
   assert.deepEqual(noMenus.data.reply.cards ?? [], []);
   const unaffected = await search(guestBrowser, '서초구 치킨 추천해줘');
-  assert.deepEqual(unaffected.data.reply.cards.map(result => result.menuId), ['original']);
+  // 수정 내역이 없는 브라우저는 동 단위 데이터(dist/data)로 추천한다: 사장님이 고친 메뉴가 보이면 안 된다
+  assert.equal(unaffected.status, 200);
+  assert.ok(!(unaffected.data.reply.cards ?? []).some(result => result.storeId === shop.id));
   assert.equal(baseReads, 1);
 });

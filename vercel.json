@@ -1,6 +1,16 @@
 {
   "framework": null,
-  "git": { "deploymentEnabled": { "main": true } },
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
   "outputDirectory": "dist",
-  "functions": { "api/recommend.js": { "maxDuration": 30 } }
+  "functions": {
+    "api/recommend.js": {
+      "maxDuration": 30,
+      "includeFiles": "dist/data/**"
+    }
+  },
+  "buildCommand": "node scripts/build-data.mjs"
 }
